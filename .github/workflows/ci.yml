@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # There is no package yet. This job is the place the test matrix goes when
+  # there is one; until then it checks that whatever Python is here compiles.
+  compile:
+    name: byte-compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Byte-compile every module
+        run: python -m compileall -q .
+
+  # The one check `main` requires (docs/GITHUB.md). Its name is load-bearing:
+  # the branch ruleset asks for "CI passed" by name, so add jobs to `needs`
+  # and leave the name alone.
+  #
+  # `if: always()` is the point. Without it this job is *skipped* when a job it
+  # needs fails, and a required check that was skipped counts as passed.
+  all:
+    name: CI passed
+    if: always()
+    needs: [compile]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job this workflow runs succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -eu
+          echo "$RESULTS"
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ["RESULTS"])
+          bad = {name: job["result"] for name, job in needs.items()
+                 if job["result"] != "success"}
+          if bad:
+              sys.exit("not passed: %s" % ", ".join(
+                  "%s %s" % pair for pair in sorted(bad.items())))
+          print("all %d jobs succeeded" % len(needs))
+          PY
