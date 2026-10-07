@@ -113,6 +113,10 @@ class Value:
         return cls(str(value), dict(attributes))
 
 
+# Beside a creditor identifier (BT-90) that was on the payee: the standard has
+# one term for it and a document two places, the seller and the payee.
+PARTY_ROLE = "Party/role"
+
 # A term that the syntax writes as an attribute of another term's element.
 # `BT-130`, the unit of the invoiced quantity, is `BT-129`'s `unitCode`.
 ATTRIBUTE_TERMS = {
@@ -186,9 +190,11 @@ class Group:
             return True
         if any(self.terms.get(term) for term in TERMS_IMPLYING.get(group, ())):
             return True
-        # The creditor identifier is the seller's unless there is a payee.
-        return (group == "BG-4" and bool(self.terms.get("BT-90"))
-                and not any(self.terms.get(term) for term in TERMS_IMPLYING["BG-10"]))
+        # The creditor identifier is on the seller or on the payee, and says which.
+        if group in ("BG-4", "BG-10"):
+            return any((value.attributes.get(PARTY_ROLE) == "payee") == (group == "BG-10")
+                       for value in self.terms.get("BT-90", ()))
+        return False
 
     def empty(self) -> bool:
         return (not any(self.terms.values()) and not any(self.groups.values())
@@ -416,7 +422,7 @@ GROUP_INSIDE = {"BG-5": "BG-4", "BG-6": "BG-4", "BG-8": "BG-7", "BG-9": "BG-7",
 # Terms that are not written where their group is. The VAT totals are in the
 # document totals and written apart from them; the VAT point date code is the
 # document's and written in the invoicing period; the creditor identifier is
-# on whichever party has it (see `Group.has`).
+# on the seller or the payee, and says which (see `Group.has`).
 WRITTEN_ELSEWHERE = {"BT-110": (), "BT-111": (), "BT-8": ("BG-14",), "BT-90": ()}
 
 

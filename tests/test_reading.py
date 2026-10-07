@@ -409,6 +409,9 @@ class TheCreditorIdentifier(unittest.TestCase):
         self.assertEqual(findings, [])
         self.assertEqual((document.text("BT-90"), document.text("BT-60"), document.text("BT-59")),
                          ("CRED", "PAYEE", "Factor"))
+        # Which party it was on is kept beside it, so it can be written back there.
+        self.assertEqual(document.term("BT-90").attributes,
+                         {"schemeID": "sepa", "Party/role": "payee"})
 
 
 if __name__ == "__main__":

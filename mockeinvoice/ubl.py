@@ -34,7 +34,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 from xml.parsers import expat
 from xml.sax.saxutils import escape, quoteattr
 
-from .model import NUMERIC, TERMS, Document, Finding, Group, Refused, Value
+from .model import NUMERIC, PARTY_ROLE, TERMS, Document, Finding, Group, Refused, Value
 
 INVOICE_NS = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
 CREDIT_NOTE_NS = "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
@@ -147,8 +147,10 @@ class Leaf:
     is in: a credit note's due date is inside `PaymentMeans`.
     """
 
-    def __init__(self, tag: str, term: str, attributes: Sequence[str] = (), root: bool = False):
+    def __init__(self, tag: str, term: str, attributes: Sequence[str] = (), root: bool = False,
+                 noting: Optional[Tuple[str, str]] = None):
         self.tag, self.term, self.root = tag, term, root
+        self.noting = noting    # kept beside each value read here: which place it was
         self.kind = TERMS[term][2] if term in TERMS else "text"
         self.attributes = tuple(attributes) + KIND_ATTRIBUTES.get(self.kind, ())
 
@@ -168,17 +170,17 @@ class Wrap:
     table's order and the first that fits has the element, so the entry with
     no `when` comes last and takes what is left. `per` names the term
     the element is written once for each value of: one `PartyIdentification`
-    to an identifier. `write` says, of the document, whether to write it here
-    at all, for a term UBL has two places for. `marks` names the group of the
+    to an identifier, and `where` picks which of the term's values are
+    written here, for a term UBL has two places for. `marks` names the group of the
     standard that this element is, where that group occurs once: its terms go
     to the group around it, and if it held nothing, that it was there at all
     is noted on that group, so it can be asked and is written back.
     """
 
     def __init__(self, tag: str, children: list, when: Optional[Callable] = None,
-                 per: str = "", write: Optional[Callable[[Group], bool]] = None,
+                 per: str = "", where: Optional[Callable[[Value], bool]] = None,
                  marks: str = ""):
-        self.tag, self.children, self.when, self.per, self.write = tag, children, when, per, write
+        self.tag, self.children, self.when, self.per, self.where = tag, children, when, per, where
         self.marks = marks      # the once-only group this element is: "BG-4"
 
 
@@ -245,11 +247,8 @@ def in_document_currency(node: Node, context) -> bool:
     return not in_accounting_currency(node, context)
 
 
-def has_payee(document: Group) -> bool:
-    return any(document.terms.get(term) for term in ("BT-59", "BT-60", "BT-61"))
-
-
 VAT_SCHEME = Wrap(cac("TaxScheme"), [Fixed(cbc("ID"), "VAT")])
+PAYEES = PARTY_ROLE, "payee"
 
 
 def address(tag: str, group: str, line1: str, line2: str, city: str, post_code: str,
@@ -266,11 +265,19 @@ def identification(term: str) -> Wrap:
     return Wrap(cac("PartyIdentification"), [Leaf(cbc("ID"), term, ["schemeID"])], per=term)
 
 
-def creditor_identifier(write: Callable[[Group], bool]) -> Wrap:
+def creditor_identifier(payee: bool) -> Wrap:
     """The bank assigned creditor identifier (BT-90): a party identifier whose
-    scheme is `SEPA`, on the payee if there is one and on the seller if not."""
-    return Wrap(cac("PartyIdentification"), [Leaf(cbc("ID"), "BT-90", ["schemeID"])],
-                when=sepa, per="BT-90", write=write)
+    scheme is `SEPA`, on the seller or on the payee.
+
+    One term with two places, and a document may use either whether or not it
+    has a payee, so which it was is kept beside the value (`PAYEES`) and it is
+    written back where it was read. A value with nothing beside it is the
+    seller's.
+    """
+    return Wrap(cac("PartyIdentification"),
+                [Leaf(cbc("ID"), "BT-90", ["schemeID"], noting=PAYEES if payee else None)],
+                when=sepa, per="BT-90",
+                where=lambda value: (value.attributes.get(PAYEES[0]) == PAYEES[1]) == payee)
 
 
 def allowance_or_charge(group: str, charge: bool, reason_code: str, reason: str,
@@ -349,7 +356,7 @@ def binding(kind: str) -> List[Entry]:
     parties: List[Entry] = [
         Wrap(cac("AccountingSupplierParty"), marks="BG-4", children=[Wrap(cac("Party"), [
             Leaf(cbc("EndpointID"), "BT-34", ["schemeID"]),
-            creditor_identifier(lambda document: not has_payee(document)),
+            creditor_identifier(payee=False),
             identification("BT-29"),
             Wrap(cac("PartyName"), [Leaf(cbc("Name"), "BT-28")]),
             address("PostalAddress", "BG-5", "BT-35", "BT-36", "BT-37", "BT-38", "BT-39",
@@ -376,7 +383,7 @@ def binding(kind: str) -> List[Entry]:
                 Leaf(cbc("Name"), "BT-56"), Leaf(cbc("Telephone"), "BT-57"),
                 Leaf(cbc("ElectronicMail"), "BT-58")])])]),
         Wrap(cac("PayeeParty"), marks="BG-10", children=[
-            creditor_identifier(has_payee),
+            creditor_identifier(payee=True),
             identification("BT-60"),
             Wrap(cac("PartyName"), [Leaf(cbc("Name"), "BT-59")]),
             Wrap(cac("PartyLegalEntity"), [Leaf(cbc("CompanyID"), "BT-61", ["schemeID"])])]),
@@ -557,7 +564,10 @@ def read_children(parent: Node, entries: List[Entry], group: Group, path: str,
 def read_entry(node: Node, entry: Entry, group: Group, path: str, reading: Reading) -> None:
     if isinstance(entry, Leaf):
         target = reading.document if entry.root else group
-        target.add(entry.term, read_value(node, entry.kind, entry.attributes, path, reading))
+        value = read_value(node, entry.kind, entry.attributes, path, reading)
+        if entry.noting:
+            value.attributes[entry.noting[0]] = entry.noting[1]
+        target.add(entry.term, value)
     elif isinstance(entry, Fixed):
         read_value(node, "code", (), path, reading)
         if node.text != entry.text:
@@ -675,10 +685,10 @@ def build(entries: List[Entry], group: Group, document: Document,
         elif isinstance(entry, Fixed):
             made.append((Node(entry.tag, text=entry.text), True))
         elif isinstance(entry, Wrap):
-            if entry.write and not entry.write(document):
-                continue
             if entry.per:
                 for value in group.terms.get(entry.per, []):
+                    if entry.where and not entry.where(value):
+                        continue
                     made += wrapped(entry, build(entry.children, group, document,
                                                  (entry.per, value), first), group)
             else:

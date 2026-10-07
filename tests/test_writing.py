@@ -55,8 +55,10 @@ def every_term(kind: str) -> Document:
                 if not document.terms.get(entry.term):      # once, however many groups
                     document.add(entry.term, value(entry))
             elif isinstance(entry, Leaf) and entry.term == "BT-90":
-                # One identifier with two places, known by its scheme.
-                document.terms["BT-90"] = [Value("CRED", {"schemeID": "SEPA"})]
+                # One identifier with two places, known by its scheme, and
+                # here in both: the seller's first, then the payee's.
+                noted = dict([entry.noting]) if entry.noting else {}
+                document.add("BT-90", Value("CRED", dict(noted, schemeID="SEPA")))
             elif isinstance(entry, Leaf):
                 group.add(entry.term, value(entry))
             elif isinstance(entry, Wrap):
@@ -232,16 +234,33 @@ class WhatIsWritten(unittest.TestCase):
             (party + "TaxScheme/ID", "FC"), (party + "TaxScheme/ID", "VAT")])
         self.assertNotIn(b"TaxScheme/ID=", write(document))
 
-    def test_the_creditor_identifier_goes_to_the_payee_if_there_is_one(self):
-        document = Document()
-        document.add("BT-90", Value("CRED", {"schemeID": "SEPA"}))
+    def test_the_creditor_identifier_is_written_on_the_party_it_was_read_from(self):
+        """It has one term and two places. A document with a payee may still
+        have it on the seller: the XRechnung test suite has one that does."""
         seller = "/Invoice/AccountingSupplierParty/Party/PartyIdentification/ID"
         payee = "/Invoice/PayeeParty/PartyIdentification/ID"
-        self.assertEqual([p for p, _t, _a in leaves(write(document))], [seller])
+        document = Document()
+        document.add("BT-90", Value("CRED", {"schemeID": "SEPA"}))
         document.add("BT-59", "Factor")
         self.assertEqual(sorted(p for p, _t, _a in leaves(write(document))),
-                         [payee, "/Invoice/PayeeParty/PartyName/Name"])
+                         [seller, "/Invoice/PayeeParty/PartyName/Name"])
         self.assertEqual(parse(write(document))[0], document)
+        self.assertTrue(document.has("BG-4"))
+
+        document = Document()
+        document.add("BT-90", Value("CRED", {"schemeID": "SEPA", "Party/role": "payee"}))
+        written = write(document)
+        self.assertEqual([p for p, _t, _a in leaves(written)], [payee])
+        self.assertNotIn(b"role", written)
+        self.assertEqual(parse(written)[0], document)
+        self.assertEqual((document.has("BG-4"), document.has("BG-10")), (False, True))
+
+        both = Document()
+        both.add("BT-90", Value("OURS", {"schemeID": "SEPA"}))
+        both.add("BT-90", Value("THEIRS", {"schemeID": "SEPA", "Party/role": "payee"}))
+        self.assertEqual(sorted((p, t) for p, t, _a in leaves(write(both))),
+                         [(seller, "OURS"), (payee, "THEIRS")])
+        self.assertEqual(parse(write(both))[0], both)
 
     def test_a_credit_notes_due_date_is_written_though_it_has_no_payment_means(self):
         document = Document(kind="CreditNote")
