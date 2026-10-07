@@ -1,7 +1,7 @@
 """mock-einvoice: EN 16931 invoices, read, held to their rules, and answered.
 
-So far: UBL 2.1 invoices and credit notes in and out, and the first of the
-published rules.
+So far: UBL 2.1 invoices and credit notes in and out, and the rules of the
+EN 16931 core.
 
     from mockeinvoice import read, validate, write
 
@@ -29,7 +29,7 @@ from typing import List, Tuple, Union
 from . import specification as _specification
 from .model import Document, Finding, Group, Refused, Value
 from .rules import Report, check
-from .ubl import parse, write
+from .ubl import parse, parse_tree, write
 
 __version__ = "0.1.0.dev0"
 
@@ -49,5 +49,6 @@ def validate(data: Union[bytes, str]) -> Tuple[Document, Report]:
     """Read a document and hold it to the rules of its specification that are
     built. The report has what the reader said first, then what the rules
     found, the rules that ran, and the published rules that did not."""
-    document, specification, findings = read(data)
-    return document, check(document, specification, findings)
+    document, findings, sent = parse_tree(data)
+    specification = _specification.identify(document)
+    return document, check(document, specification, findings, sent)

@@ -9,10 +9,23 @@ says so where it does.
 ## [Unreleased]
 
 Nothing is released yet. What is here reads and writes invoices and holds them
-to the first of the published rules.
+to every rule of the EN 16931 core.
 
 ### Added
 
+- **The rules of the EN 16931 core about the UBL document itself** ([#11]):
+  `UBL-CR`, `UBL-DT` and `UBL-SR`, 756 rules, which makes all 979 of the core
+  built. They are asked of the document's elements and not of the model:
+  `validate` asks them of the document as sent, and `check`, given only a
+  model, of the document it would be written as. All but 26 are one of two
+  tests with a different path in each; the paths are generated from the
+  published rules by `tools/ubl_syntax.py` into `rules/ublsyntax.py`, which
+  like the code lists is under the EUPL 1.2. Only 9 of the 756 have a unit
+  test from their publisher, and those agree; the rest are held to the
+  standard library's reading of the same paths.
+- **An element is reported once** ([#11]). Where a published rule reports an
+  element the reader does not hold, or one that is repeated, the reader's own
+  finding about it is left out of the report.
 - **The code list rules of the EN 16931 core** ([#10]): `BR-CL-01` to
   `BR-CL-26`, 23 rules, which makes 223 built and leaves only the rules about
   the UBL document itself. The lists are generated from the published rules
@@ -105,3 +118,4 @@ to the first of the published rules.
 [#8]: https://github.com/rseufert/mock-einvoice/issues/8
 [#9]: https://github.com/rseufert/mock-einvoice/issues/9
 [#10]: https://github.com/rseufert/mock-einvoice/issues/10
+[#11]: https://github.com/rseufert/mock-einvoice/issues/11

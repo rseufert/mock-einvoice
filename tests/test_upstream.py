@@ -6,7 +6,7 @@ import unittest
 
 from mockeinvoice import Refused, read, validate, write
 from mockeinvoice.rules import REGISTRY, published, run
-from mockeinvoice.ubl import parse
+from mockeinvoice.ubl import parse, parse_tree
 
 from . import EXTERNAL, upstream
 from .test_writing import leaves, unnumbered
@@ -33,11 +33,10 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertEqual(disagreements, [])
         self.assertEqual(dict(counts), {
             "files": 278, "cases": 1137, "expectations": 1139,
-            "agree": 1094,          # every case for a rule that is built
-            "not built": 32,        # compared with nothing, and not counted as agreeing
+            "agree": 1126,          # every case for a rule that is built
             "unpublished": 12,      # BR-CO-25, which the pinned rule file does not have
             "not held": 1})         # see `upstream.NOT_HELD`
-        self.assertEqual(len(not_built), 9)
+        self.assertEqual(not_built, {})        # every rule of the core is built
         self.assertTrue(set(not_built).isdisjoint(REGISTRY["en16931"]))
         self.assertLessEqual(set(not_built), set(published.EN16931))
 
@@ -49,14 +48,17 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         compared = named & set(REGISTRY["en16931"])
         # The publisher has cases for 19 of the 23 calculation rules built,
         # for every one of the 58 plain business rules and for 95 of the 98
-        # VAT category rules and for 19 of the 23 code list rules.
-        self.assertEqual(len(compared), 19 + 58 + 95 + 19)
+        # VAT category rules, for 19 of the 23 code list rules, and for 9 of
+        # the 756 rules about the UBL document itself.
+        self.assertEqual(len(compared), 19 + 58 + 95 + 19 + 9)
         self.assertEqual(sum(1 for i in compared if i.startswith("BR-CO-")), 19)
         # No cases are published for the four that cannot fail, for any of
         # the decimals rules, for the two split payment rules, for the
         # exemption reason of an intra-community supply or for four of the
         # code lists: those rest on this project's own tests.
-        self.assertEqual(sorted(set(REGISTRY["en16931"]) - named), sorted(
+        without = set(REGISTRY["en16931"]) - named
+        self.assertEqual(sum(1 for i in without if i.startswith("UBL-")), 747)
+        self.assertEqual(sorted(i for i in without if not i.startswith("UBL-")), sorted(
             ["BR-CO-05", "BR-CO-06", "BR-CO-07", "BR-CO-08", "BR-B-01", "BR-B-02", "BR-IC-10",
              "BR-CL-08", "BR-CL-22", "BR-CL-25", "BR-CL-26"]
             + [i for i in REGISTRY["en16931"] if i.startswith("BR-DEC-")]))
@@ -82,7 +84,7 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertTrue(always and all(d[2] == "success" and d[4] == "fatal"
                                        for d in always), always)
         self.assertEqual(len(disagreements), len(silenced) + len(always))
-        self.assertEqual(counts["agree"] + counts["disagree"], 1094)
+        self.assertEqual(counts["agree"] + counts["disagree"], 1126)
         self.assertEqual({d[0] for d in silenced}, {"Invoice-unit-UBL/BR-CO-10.xml"})
         self.assertEqual(upstream.tally("en16931")[1], [])       # and whole again, none
 
@@ -190,9 +192,21 @@ class DocumentsThisProjectDidNotWrite(unittest.TestCase):
         before, after = leaves(data), leaves(written)
         self.assertEqual(before - after, type(before)(), name)
         self.assertEqual(after - before, type(before)(), name)
+        # Not a failure and not a warning, of any rule of the core.
         _document, report = validate(data)
-        self.assertEqual((report.failures, report.verdict), ([], "not judged"), name)
+        self.assertEqual((report.findings, report.verdict), ([], "not judged"), name)
+        self.assertEqual(len(report.ran), 979)
         return sum(before.values())
+
+    def test_no_rule_of_the_core_has_anything_to_say_of_the_en16931_examples(self):
+        """They name no specification this takes, so they are not validated;
+        the core's rules are asked of them as they were sent all the same."""
+        count = 0
+        for name, data in documents(os.path.join(EXTERNAL, "en16931")):
+            document, _findings, sent = parse_tree(data)
+            self.assertEqual(list(run(document, "en16931", sent)), [], name)
+            count += 1
+        self.assertEqual(count, 17)
 
     def test_the_xrechnung_test_suites_valid_documents_are_taken_whole(self):
         elements = count = 0

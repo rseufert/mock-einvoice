@@ -20,6 +20,18 @@ both: a document with no failing rule is `valid` only when every fatal rule
 of its layers ran. Until then the most it can be is `not judged`. Passing a
 document on rules that were not run is the one thing this must never do.
 
+Two things a rule can be asked of
+---------------------------------
+Most rules are asked of the model. The rules about the UBL document itself
+(`UBL-CR`, `UBL-DT`, `UBL-SR`) are asked of its elements, because they are
+about elements the model does not hold. `validate` gives them the document
+as it was sent. `check`, given only a model, asks them of the document that
+model would be written as, since that is the only XML there is.
+
+Where one of those rules reports an element, what the reader said of the
+same element is left out of the report: "not held" and "repeated" are the
+reader's words for what the published rule says under its own name.
+
 How a rule is written
 ---------------------
 The published rules are Schematron: XPath over the UBL document. Each
@@ -35,7 +47,7 @@ from __future__ import annotations
 
 import decimal
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, Iterator, List, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 from ..model import Document, Finding
 from . import published
@@ -53,7 +65,10 @@ class Rule:
     id: str
     layer: str
     about: str                      # what the rule asks, in our words
-    check: Callable[[Document], Iterable[Failure]]
+    check: Callable[[Any], Iterable[Failure]]
+    # What it is asked of: the "model", or the "tree" of the document's
+    # elements (`tree.At`, the root).
+    over: str = "model"
 
     @property
     def flag(self) -> str:
@@ -67,15 +82,15 @@ class Rule:
 REGISTRY: Dict[str, Dict[str, Rule]] = {layer: {} for layer in published.LAYERS}
 
 
-def rule(layer: str, identifier: str, about: str) -> Callable:
+def rule(layer: str, identifier: str, about: str, over: str = "model") -> Callable:
     """Register a function as a published rule. The identifier must be one
     its layer publishes, and no rule is written twice."""
-    def register(check: Callable[[Document], Iterable[Failure]]) -> Callable:
+    def register(check: Callable[[Any], Iterable[Failure]]) -> Callable:
         if identifier not in published.LAYERS[layer]:
             raise ValueError("%s is not a rule %s publishes" % (identifier, layer))
         if identifier in REGISTRY[layer]:
             raise ValueError("%s is written twice" % identifier)
-        REGISTRY[layer][identifier] = Rule(identifier, layer, about, check)
+        REGISTRY[layer][identifier] = Rule(identifier, layer, about, check, over)
         return check
     return register
 
@@ -113,27 +128,46 @@ class Report:
 
 
 def check(document: Document, specification: str,
-          reading: Sequence[Finding] = ()) -> Report:
+          reading: Sequence[Finding] = (), sent=None) -> Report:
     """Hold a document to the rules of its specification that are built.
 
     `reading` is what the reader had to say about the document; it goes at
-    the head of the report and counts towards the verdict.
+    the head of the report and counts towards the verdict. `sent` is the
+    document's elements as they were sent (`ubl.parse_tree`); without it the
+    rules about the XML are asked of the model as it would be written.
     """
     if specification not in LAYERS_OF:
         raise ValueError("a specification is one of %s, not %r"
                          % (", ".join(sorted(LAYERS_OF)), specification))
-    report = Report(specification, list(reading))
+    report = Report(specification)
     for layer in LAYERS_OF[specification]:
-        report.findings.extend(run(document, layer))
+        report.findings.extend(run(document, layer, sent))
         report.ran.extend(REGISTRY[layer])
         report.not_built[layer] = {identifier: flag
                                    for identifier, flag in published.LAYERS[layer].items()
                                    if identifier not in REGISTRY[layer]}
+    report.findings[:0] = unsaid(reading, report.findings)
     return report
 
 
-def run(document: Document, layer: str) -> Iterator[Finding]:
+def unsaid(reading: Sequence[Finding], found: Sequence[Finding]) -> List[Finding]:
+    """What the reader said that no rule about the XML has said.
+
+    The reader reports an element it does not hold, and one repeated where
+    the standard has one. Where a published rule reports that element, or
+    something in it, under its own name, the reader's finding is dropped.
+    """
+    places = [finding.path for finding in found if finding.code.startswith("UBL-")]
+    return [finding for finding in reading
+            if finding.code not in ("UNHELD", "REPEATED")
+            or not any(place == finding.path or place.startswith(finding.path + "/")
+                       or place.startswith(finding.path + "[")
+                       for place in places)]
+
+
+def run(document: Document, layer: str, sent=None) -> Iterator[Finding]:
     """Every failure of one layer's built rules, in the order they are published."""
+    root = None
     # Sums of amounts are exact in decimal arithmetic given room for them.
     with decimal.localcontext() as context:
         context.prec = 60
@@ -141,8 +175,12 @@ def run(document: Document, layer: str) -> Iterator[Finding]:
             found = REGISTRY[layer].get(identifier)
             if found is None:
                 continue
+            if found.over == "tree" and root is None:
+                from .. import ubl
+                from . import tree
+                root = tree.top(sent if sent is not None else ubl.tree(ubl.write(document)))
             try:
-                failures = list(found.check(document))
+                failures = list(found.check(root if found.over == "tree" else document))
             except Incomputable as error:
                 failures = [("", "could not be computed: %s" % error)]
             for path, detail in failures:
@@ -152,4 +190,5 @@ def run(document: Document, layer: str) -> Iterator[Finding]:
 
 from . import en16931 as _en16931  # noqa: E402,F401  (registers its rules)
 from . import en16931_codes as _en16931_codes  # noqa: E402,F401
+from . import en16931_ubl as _en16931_ubl  # noqa: E402,F401
 from . import en16931_vat as _en16931_vat  # noqa: E402,F401

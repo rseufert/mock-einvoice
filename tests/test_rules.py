@@ -8,7 +8,7 @@ from mockeinvoice import check, read, rules, validate
 from mockeinvoice.model import Finding
 from mockeinvoice.rules import REGISTRY, Report, published, rule
 from mockeinvoice.rules.calculation import cents, decimals_after_point, xpath_round
-from mockeinvoice.ubl import parse
+from mockeinvoice.ubl import parse, parse_tree
 
 from . import sample
 from .test_reading import invoice
@@ -34,9 +34,9 @@ def changed(text: str, *pairs: str) -> str:
 
 
 def found(text: str):
-    """The rules that fail on a document, as (identifier, where)."""
-    document, _findings = parse(text)
-    return [(f.code, f.path) for f in rules.run(document, "en16931")]
+    """The rules that fail on a document as it was sent, as (identifier, where)."""
+    document, _findings, sent = parse_tree(text)
+    return [(f.code, f.path) for f in rules.run(document, "en16931", sent)]
 
 
 def failing(text: str):
@@ -48,10 +48,14 @@ class TheEngine(unittest.TestCase):
         for layer, built in REGISTRY.items():
             self.assertLessEqual(set(built), set(published.LAYERS[layer]), layer)
 
-    def test_all_of_the_core_but_the_rules_about_ubl_itself_is_built(self):
-        expected = {i for i in published.EN16931 if not i.startswith("UBL-")}
-        self.assertEqual(set(REGISTRY["en16931"]), expected)
-        self.assertEqual(len(expected), 44 + 58 + 98 + 23)
+    def test_all_of_the_core_is_built_and_nothing_of_the_two_layers_on_it_yet(self):
+        self.assertEqual(set(REGISTRY["en16931"]), set(published.EN16931))
+        self.assertEqual(len(REGISTRY["en16931"]), 979)
+        over = {name: sum(1 for r in REGISTRY["en16931"].values() if r.over == name)
+                for name in ("model", "tree")}
+        self.assertEqual(over, {"model": 44 + 58 + 98 + 23, "tree": 756})
+        self.assertTrue(all((r.over == "tree") == i.startswith("UBL-")
+                            for i, r in REGISTRY["en16931"].items()))
         self.assertEqual((REGISTRY["peppol"], REGISTRY["xrechnung"]), ({}, {}))
 
     def test_the_published_lists_are_the_sizes_the_sources_have(self):
@@ -86,7 +90,7 @@ class TheEngine(unittest.TestCase):
                        "<cbc:CompanyID>DE123456789", "<cbc:CompanyID>XX123456789")
         order = list(published.EN16931)
         codes = [code for code, _path in found(text)]
-        self.assertEqual(sorted(codes), ["BR-CO-09", "BR-CO-16", "BR-DEC-18"])
+        self.assertEqual(sorted(codes), ["BR-CO-09", "BR-CO-16", "BR-DEC-18", "UBL-DT-01"])
         self.assertEqual(codes, sorted(codes, key=order.index))
 
 
@@ -96,16 +100,15 @@ class TheReport(unittest.TestCase):
         self.assertEqual(document.text("BT-1"), "GLX-4711")
         self.assertEqual((report.specification, report.findings, report.verdict),
                          ("peppol", [], "not judged"))
-        self.assertEqual(len(report.ran), 223)
+        # Every rule of the core ran, and none of Peppol's is built.
+        self.assertEqual(len(report.ran), 979)
         self.assertEqual(sorted(report.not_built), ["en16931", "peppol"])
-        self.assertEqual(len(report.not_built["en16931"]), 979 - 223)
+        self.assertEqual(report.not_built["en16931"], {})
         self.assertEqual(len(report.not_built["peppol"]), 166)
-        self.assertNotIn("BR-CO-10", report.not_built["en16931"])
-        self.assertEqual(report.not_built["en16931"]["UBL-SR-01"], "fatal")
-        fatal = sum(1 for flag in published.EN16931.values() if flag == "fatal") \
-            + sum(1 for flag in published.PEPPOL.values() if flag == "fatal")
-        built_fatal = sum(1 for i in REGISTRY["en16931"] if published.EN16931[i] == "fatal")
-        self.assertEqual(report.unasked, fatal - built_fatal)
+        self.assertEqual(report.not_built["peppol"]["PEPPOL-EN16931-R001"], "fatal")
+        self.assertEqual(report.unasked, sum(1 for flag in published.PEPPOL.values()
+                                             if flag == "fatal"))
+        self.assertEqual(report.unasked, 139)
 
     def test_an_xrechnung_document_is_owed_xrechnungs_rules_and_not_peppols(self):
         _document, report = validate(sample("xrechnung-invoice.xml"))
@@ -181,7 +184,9 @@ class EachRuleFailsAlone(unittest.TestCase):
     TWINS = {"BR-CO-21": "BR-33", "BR-CO-22": "BR-38", "BR-CO-23": "BR-42", "BR-CO-24": "BR-44"}
     # And five change what the standard rated category's breakdown must come
     # to, so its own rules fail beside them (`test_vat_rules.py`).
-    VAT = {"BR-CO-04": ["BR-S-08"], "BR-CO-11": ["BR-S-08"], "BR-CO-12": ["BR-S-08"],
+    # A line with no VAT category also fails the rule that it has exactly one,
+    # and an amount with three decimals the rule that says so of any amount.
+    VAT = {"BR-CO-04": ["BR-S-08", "UBL-SR-48"], "BR-CO-11": ["BR-S-08"], "BR-CO-12": ["BR-S-08"],
            "BR-CO-13": ["BR-S-08"], "BR-CO-17": ["BR-S-08", "BR-S-09"]}
     CASES = {
         "BR-CO-03": ("<cbc:DocumentCurrencyCode>", "<cbc:TaxPointDate>2026-10-02</cbc:TaxPointDate>"
@@ -269,7 +274,8 @@ class EachRuleFailsAlone(unittest.TestCase):
 
     def expected(self, identifier: str) -> list:
         return sorted({identifier, self.TWINS.get(identifier, identifier)}
-                      | set(self.VAT.get(identifier, ())))
+                      | set(self.VAT.get(identifier, ()))
+                      | ({"UBL-DT-01"} if identifier.startswith("BR-DEC-") else set()))
 
     def test_each_change_fails_its_rule_and_no_other(self):
         for identifier, pairs in self.CASES.items():
@@ -309,7 +315,8 @@ class EachRuleFailsAlone(unittest.TestCase):
         # Three decimals on the total VAT amount, which BR-DEC-13 is about.
         text = changed(INVOICE, '<cbc:TaxAmount currencyID="EUR">190.00</cbc:TaxAmount>\n    <cac:TaxSubtotal>',
                        '<cbc:TaxAmount currencyID="EUR">190.000</cbc:TaxAmount>\n    <cac:TaxSubtotal>')
-        self.assertEqual(found(text), [])
+        # The rule on any amount's decimals finds what BR-DEC-13 cannot.
+        self.assertEqual(found(text), [("UBL-DT-01", "/Invoice/cac:TaxTotal/cbc:TaxAmount")])
 
 
 class WhatTheTestsSayExactly(unittest.TestCase):
@@ -525,9 +532,12 @@ class WhatTheTestsSayExactly(unittest.TestCase):
     def test_a_failure_on_one_of_several_says_which(self):
         text = changed(INVOICE, "<cbc:Name>Installation</cbc:Name>\n      " + VAT_CATEGORY,
                        "<cbc:Name>Installation</cbc:Name>")
-        self.assertEqual(found(text), [("BR-CO-04", "BG-25[2]"), ("BR-S-08", "BG-23")])
+        self.assertEqual(found(text), [("BR-CO-04", "BG-25[2]"), ("BR-S-08", "BG-23"),
+                                       ("UBL-SR-48", "/Invoice/cac:InvoiceLine[2]")])
         text = changed(INVOICE, LINE_ALLOWANCE, LINE_ALLOWANCE.replace("50.00", "50.000"))
-        self.assertEqual(found(text), [("BR-DEC-24", "BG-25[2]/BG-27/BT-136")])
+        self.assertEqual(found(text), [
+            ("BR-DEC-24", "BG-25[2]/BG-27/BT-136"),
+            ("UBL-DT-01", "/Invoice/cac:InvoiceLine[2]/cac:AllowanceCharge/cbc:Amount")])
 
 
 class ChangesThatFailTwoRules(unittest.TestCase):

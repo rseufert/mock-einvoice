@@ -35,7 +35,7 @@ import xml.etree.ElementTree as ET
 
 from mockeinvoice import Refused, rules
 from mockeinvoice.rules import REGISTRY, published
-from mockeinvoice.ubl import parse
+from mockeinvoice.ubl import parse_tree
 
 from . import EXTERNAL, SAMPLES
 
@@ -106,12 +106,12 @@ def tally(name: str):
         for number, expectations, data in cases(path):
             counts["cases"] += 1
             try:
-                document, findings = parse(data)
+                document, findings, sent = parse_tree(data)
             except Refused:
                 counts["not ours"] += 1
                 continue
             fired = {finding.code: finding.level
-                     for layer in layers for finding in rules.run(document, layer)}
+                     for layer in layers for finding in rules.run(document, layer, sent)}
             for kind, identifier in expectations:
                 counts["expectations"] += 1
                 layer = next((l for l in layers if identifier in published.LAYERS[l]), None)
