@@ -2,7 +2,7 @@
 import unittest
 
 from mockeinvoice.rules import REGISTRY, published, run
-from mockeinvoice.rules.peppol_de import iban
+from mockeinvoice.rules.german import iban
 from mockeinvoice.ubl import parse_tree
 
 from .test_business_rules import cut

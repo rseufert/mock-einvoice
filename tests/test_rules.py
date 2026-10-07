@@ -62,7 +62,11 @@ class TheEngine(unittest.TestCase):
             i for i in published.PEPPOL if i.startswith(("PEPPOL-", "DE-R-"))))
         self.assertEqual(len(REGISTRY["peppol"]), 63 + 31)
         self.assertTrue(all(r.over == "tree" for r in REGISTRY["peppol"].values()))
-        self.assertEqual(REGISTRY["xrechnung"], {})
+        # Of XRechnung's, the 34 of a standard document; not its Extension's
+        # or its CVD's.
+        self.assertEqual(len(REGISTRY["xrechnung"]), 34)
+        self.assertFalse(any(i.startswith(("BR-DEX-", "BR-DE-CVD-", "BR-TMP-CVD-"))
+                             for i in REGISTRY["xrechnung"]))
 
     def test_the_published_lists_are_the_sizes_the_sources_have(self):
         self.assertEqual({layer: len(found) for layer, found in published.LAYERS.items()},
@@ -122,9 +126,12 @@ class TheReport(unittest.TestCase):
     def test_an_xrechnung_document_is_owed_xrechnungs_rules_and_not_peppols(self):
         _document, report = validate(sample("xrechnung-invoice.xml"))
         self.assertEqual(sorted(report.not_built), ["en16931", "xrechnung"])
-        self.assertEqual(len(report.not_built["xrechnung"]), 56)
-        self.assertEqual(report.not_applicable, {"en16931": {}, "xrechnung": {}})
-        self.assertEqual(report.verdict, "not judged")
+        self.assertEqual(report.not_built, {"en16931": {}, "xrechnung": {}})
+        # The rules of XRechnung Extension and CVD are for documents that
+        # name those, which are refused before any rule is asked.
+        self.assertEqual(len(report.not_applicable["xrechnung"]), 22)
+        self.assertEqual(len(report.ran), 979 + 34)
+        self.assertEqual((report.findings, report.verdict), ([], "valid"))
 
     def test_one_failing_rule_is_invalid(self):
         _document, report = validate(changed(INVOICE, ">1190.00</cbc:PayableAmount>",

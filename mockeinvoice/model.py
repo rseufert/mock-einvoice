@@ -66,8 +66,9 @@ class Finding:
     found it (`BR-CO-15`). The reader's own findings have codes of its own, in
     capitals without a number, so the two cannot be mistaken for each other.
     """
-    level: str          # a published rule's flag ("fatal", "warning"), or the
-                        # reader's own "error" or "warning"
+    level: str          # a published rule's flag ("fatal", "warning", or
+                        # XRechnung's "information"), or the reader's own
+                        # "error" or "warning"
     code: str
     path: str           # where: in the document as sent, or in the model
     text: str

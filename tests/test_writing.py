@@ -295,14 +295,15 @@ class WhatIsWritten(unittest.TestCase):
         import mockeinvoice
         from mockeinvoice import model, rules, specification
         from mockeinvoice.rules import (calculation, en16931, en16931_codes, en16931_ubl,
-                                        en16931_vat, peppol, peppol_de, tree)
+                                        en16931_vat, german, peppol, peppol_de, tree,
+                                        xrechnung)
         # `double_sum` is the published tests' `xs:decimal(cbc:X + 1)`, which is
         # a double's sum, and says so. No amount is held as a float anywhere.
         allowed = inspect.getsource(calculation.double_sum)
         self.assertEqual(allowed.count("float("), 2)
         for module in (mockeinvoice, model, specification, ubl, rules, calculation, en16931,
-                       en16931_codes, en16931_ubl, en16931_vat, peppol, peppol_de,
-                       tree):
+                       en16931_codes, en16931_ubl, en16931_vat, german, peppol,
+                       peppol_de, tree, xrechnung):
             source = inspect.getsource(module).replace(allowed, "")
             code = "\n".join(line.split("#")[0] for line in source.splitlines())
             self.assertNotIn("float(", code, module.__name__)

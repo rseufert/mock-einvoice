@@ -187,6 +187,7 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
 
 class DocumentsThisProjectDidNotWrite(unittest.TestCase):
     verdicts = {}
+    informed = 0
 
     def taken(self, name, data, specification):
         """Read with nothing to say, written back whole, and no rule failing."""
@@ -197,9 +198,12 @@ class DocumentsThisProjectDidNotWrite(unittest.TestCase):
         before, after = leaves(data), leaves(written)
         self.assertEqual(before - after, type(before)(), name)
         self.assertEqual(after - before, type(before)(), name)
-        # Not a failure and not a warning, of any rule that is built.
+        # Not a failure and not a warning, of any rule that is built. The one
+        # thing said is XRechnung's piece of information, which is no fault.
         _document, report = validate(data)
-        self.assertEqual(report.findings, [], name)
+        self.assertEqual([f for f in report.findings if f.level != "information"], [], name)
+        self.assertLessEqual({f.code for f in report.findings}, {"BR-DE-TMP-32"}, name)
+        type(self).informed += len(report.findings)
         self.assertGreaterEqual(len(report.ran), 979)
         self.verdicts[name] = report.verdict
         return sum(before.values())
@@ -216,6 +220,7 @@ class DocumentsThisProjectDidNotWrite(unittest.TestCase):
 
     def test_the_xrechnung_test_suites_valid_documents_are_taken_whole(self):
         elements = count = 0
+        type(self).informed = 0
         for folder in ("business-cases/standard", "technical-cases/cius"):
             for name, data in documents(os.path.join(XRECHNUNG, *folder.split("/"))):
                 with self.subTest(name=name):
@@ -223,9 +228,12 @@ class DocumentsThisProjectDidNotWrite(unittest.TestCase):
                 count += 1
         self.assertEqual(count, 39)
         self.assertGreater(elements, 4000)
-        # None of XRechnung's own rules is built, so none is judged.
-        self.assertEqual({self.verdicts[name] for name, _data in documents(
-            os.path.join(XRECHNUNG, "business-cases", "standard"))}, {"not judged"})
+        # Every one of them is valid. Seventeen are told that they do not say
+        # when they were delivered, which XRechnung publishes as information.
+        for folder in ("business-cases/standard", "technical-cases/cius"):
+            for name, _data in documents(os.path.join(XRECHNUNG, *folder.split("/"))):
+                self.assertEqual(self.verdicts[name], "valid", name)
+        self.assertEqual(type(self).informed, 17)
 
     def test_its_extension_and_cvd_documents_are_refused_by_name(self):
         for folder, code, count in (("business-cases/extension", "XRECHNUNG-EXTENSION", 5),
