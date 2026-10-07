@@ -8,6 +8,15 @@ says so where it does.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-10-07
+
+Every rule Peppol BIS Billing publishes is now built: the 71 for a seller in
+Denmark, Greece, Iceland, Italy, the Netherlands, Norway or Sweden were the
+last. **It changes what such a document gets:** it was "not judged" and the
+server turned it away, and it is now `valid` or `invalid`.
+
 ### Added
 
 - **Peppol's rules for a seller in Denmark, Greece, Iceland, Italy, the

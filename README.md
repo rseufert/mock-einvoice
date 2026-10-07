@@ -11,7 +11,7 @@ mock-einvoice --port 8100
 
 It reads and writes UBL invoices and credit notes, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to all 165 of Peppol's (its own 63, the 31 it has for Germany and the 71 for seven other countries), and to the 34 of a standard XRechnung document; responses to all 82 of theirs. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones, and a supplier that sends them and takes the answers.
 
-**What 0.1.0 is not:**
+**What 0.2.0 is not:**
 
 - **It writes no invoices of its own.** The supplier sends the documents it is given.
 - **It knows nothing of the other mocks.** Writing an invoice from one of mock-sap's billing documents, and saying "paid" when SAP has cleared it, is integration, and belongs in [mock-acme](https://github.com/rseufert/mock-acme) with the rest of it. It is not built there yet.
