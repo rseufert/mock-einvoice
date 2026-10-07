@@ -66,14 +66,14 @@ class EachRuleFails(unittest.TestCase):
         "BR-03": (without("<cbc:IssueDate>", "</cbc:IssueDate>"), ()),
         "BR-04": (without("<cbc:InvoiceTypeCode>", "</cbc:InvoiceTypeCode>"), ()),
         "BR-05": (swap("<cbc:DocumentCurrencyCode>EUR", "<cbc:DocumentCurrencyCode>"),
-                  ("BR-CO-15",)),
+                  ("BR-CL-04", "BR-CO-15")),     # and nothing is not a currency
         "BR-06": (swap("Globex GmbH</cbc:RegistrationName>", "</cbc:RegistrationName>"), ()),
         "BR-07": (without("<cbc:RegistrationName>ACME", "</cbc:RegistrationName>"), ()),
         "BR-08": (without("<cac:PostalAddress>\n        <cbc:StreetName>Industrie",
                           "</cac:PostalAddress>"), ()),
         "BR-09": (swap("20095</cbc:PostalZone>\n        <cac:Country>\n          "
                        "<cbc:IdentificationCode>DE", "20095</cbc:PostalZone>\n        "
-                       "<cac:Country>\n          <cbc:IdentificationCode>"), ()),
+                       "<cac:Country>\n          <cbc:IdentificationCode>"), ("BR-CL-14",)),
         "BR-10": (without("<cac:PostalAddress>\n        <cbc:StreetName>Hauptstrasse",
                           "</cac:PostalAddress>"), ()),
         "BR-11": (without("10115</cbc:PostalZone>\n        <cac:Country>", "</cac:Country>",
@@ -458,7 +458,8 @@ class TheRest(unittest.TestCase):
     def test_a_scheme_named_as_nothing_is_still_named(self):
         text = changed(INVOICE, '<cbc:EndpointID schemeID="0088">4012345000009',
                        '<cbc:EndpointID schemeID="">4012345000009')
-        self.assertEqual(found(text), [])
+        # To the rule that wants one named. Nothing is not in the code list.
+        self.assertEqual(found(text), [("BR-CL-25", "BT-34")])
 
     def test_an_item_attribute_wants_both_and_says_which_is_missing(self):
         text = changed(INVOICE, "<cbc:Name>Colour</cbc:Name>", "")

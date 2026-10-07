@@ -5,7 +5,7 @@ import os
 import unittest
 
 from mockeinvoice import Refused, read, validate, write
-from mockeinvoice.rules import REGISTRY, published
+from mockeinvoice.rules import REGISTRY, published, run
 from mockeinvoice.ubl import parse
 
 from . import EXTERNAL, upstream
@@ -33,10 +33,11 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertEqual(disagreements, [])
         self.assertEqual(dict(counts), {
             "files": 278, "cases": 1137, "expectations": 1139,
-            "agree": 1047,          # every case for a rule that is built
-            "not built": 80,        # compared with nothing, and not counted as agreeing
-            "unpublished": 12})     # BR-CO-25, which the pinned rule file does not have
-        self.assertEqual(len(not_built), 28)
+            "agree": 1094,          # every case for a rule that is built
+            "not built": 32,        # compared with nothing, and not counted as agreeing
+            "unpublished": 12,      # BR-CO-25, which the pinned rule file does not have
+            "not held": 1})         # see `upstream.NOT_HELD`
+        self.assertEqual(len(not_built), 9)
         self.assertTrue(set(not_built).isdisjoint(REGISTRY["en16931"]))
         self.assertLessEqual(set(not_built), set(published.EN16931))
 
@@ -48,15 +49,16 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         compared = named & set(REGISTRY["en16931"])
         # The publisher has cases for 19 of the 23 calculation rules built,
         # for every one of the 58 plain business rules and for 95 of the 98
-        # VAT category rules.
-        self.assertEqual(len(compared), 19 + 58 + 95)
+        # VAT category rules and for 19 of the 23 code list rules.
+        self.assertEqual(len(compared), 19 + 58 + 95 + 19)
         self.assertEqual(sum(1 for i in compared if i.startswith("BR-CO-")), 19)
         # No cases are published for the four that cannot fail, for any of
-        # the decimals rules, for the two split payment rules or for the
-        # exemption reason of an intra-community supply: those rest on this
-        # project's own tests.
+        # the decimals rules, for the two split payment rules, for the
+        # exemption reason of an intra-community supply or for four of the
+        # code lists: those rest on this project's own tests.
         self.assertEqual(sorted(set(REGISTRY["en16931"]) - named), sorted(
-            ["BR-CO-05", "BR-CO-06", "BR-CO-07", "BR-CO-08", "BR-B-01", "BR-B-02", "BR-IC-10"]
+            ["BR-CO-05", "BR-CO-06", "BR-CO-07", "BR-CO-08", "BR-B-01", "BR-B-02", "BR-IC-10",
+             "BR-CL-08", "BR-CL-22", "BR-CL-25", "BR-CL-26"]
             + [i for i in REGISTRY["en16931"] if i.startswith("BR-DEC-")]))
 
     def test_a_rule_that_stops_working_is_a_disagreement_and_not_a_smaller_count(self):
@@ -80,7 +82,7 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertTrue(always and all(d[2] == "success" and d[4] == "fatal"
                                        for d in always), always)
         self.assertEqual(len(disagreements), len(silenced) + len(always))
-        self.assertEqual(counts["agree"] + counts["disagree"], 1047)
+        self.assertEqual(counts["agree"] + counts["disagree"], 1094)
         self.assertEqual({d[0] for d in silenced}, {"Invoice-unit-UBL/BR-CO-10.xml"})
         self.assertEqual(upstream.tally("en16931")[1], [])       # and whole again, none
 
@@ -96,7 +98,7 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
             counts, fewer, _not_built = upstream.tally("en16931")
         finally:
             built["BR-CO-18"] = whole
-            upstream.KNOWN_WRONG.clear()
+            upstream.KNOWN_WRONG.clear()        # it has nothing of its own in it
         self.assertEqual((counts["known wrong"], len(fewer)), (1, len(disagreements) - 1))
 
     def test_a_warning_is_not_an_error_to_a_case_that_expects_one(self):
@@ -112,8 +114,41 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertEqual({d[2:] for d in disagreements}, {("error", "BR-CO-10", "warning")})
 
     def test_nothing_is_held_to_be_wrong_without_a_reason(self):
-        for case, reason in upstream.KNOWN_WRONG.items():
+        self.assertEqual(upstream.KNOWN_WRONG, {})
+        for case, reason in upstream.NOT_HELD.items():
             self.assertGreater(len(reason), 40, case)
+
+    def test_the_one_case_in_a_document_that_is_not_ubls(self):
+        """A credit note with an invoice's line in it: the published rule
+        fires on the code inside, and here the line is not held."""
+        (label, number, identifier), = upstream.NOT_HELD
+        folder, _layers = upstream.SETS["en16931"]
+        data = next(data for n, _expectations, data in upstream.cases(
+            os.path.join(folder, *label.split("/"))) if n == number)
+        document, findings = parse(data)
+        self.assertEqual(document.kind, "CreditNote")
+        self.assertEqual([(f.code, f.path) for f in findings],
+                         [("UNHELD", "/CreditNote/cac:InvoiceLine")])
+        self.assertEqual(document.all("BG-25"), [])
+        # Said of the line a credit note does have, the same code fails.
+        as_it_should_be = data.replace(b"InvoiceLine", b"CreditNoteLine")
+        fired = [f.code for f in run(parse(as_it_should_be)[0], "en16931")]
+        self.assertIn(identifier, fired)
+
+    def test_a_case_is_not_excused_as_not_held_unless_the_reader_said_so(self):
+        case = ("Invoice-unit-UBL/BR-CO-10.xml", 2, "BR-CO-10")
+        import dataclasses
+        built = REGISTRY["en16931"]
+        whole = built["BR-CO-10"]
+        try:
+            built["BR-CO-10"] = dataclasses.replace(whole, check=lambda document: [])
+            upstream.NOT_HELD[case] = "for this test only"
+            counts, disagreements, _not_built = upstream.tally("en16931")
+        finally:
+            built["BR-CO-10"] = whole
+            del upstream.NOT_HELD[case]
+        self.assertEqual(counts["not held"], 1)     # the real one, and not this
+        self.assertTrue(disagreements)
 
     @unittest.skipUnless(HAVE_PEPPOL, WITHOUT_PEPPOL)
     def test_peppols_unit_tests(self):

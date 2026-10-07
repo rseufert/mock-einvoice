@@ -3,7 +3,7 @@
 Built so far: the rules on what a document must have in it (`BR-01` to
 `BR-65`), the calculation rules (`BR-CO-*`) and the rules on how many decimals
 an amount carries (`BR-DEC-*`). The VAT category rules are in
-`en16931_vat.py`. Read `rules/__init__.py` first.
+`en16931_vat.py` and the code list rules in `en16931_codes.py`. Read `rules/__init__.py` first.
 
 Each function is its rule's published test, restated against the model. The
 tests are XPath over UBL, and where the model is further from UBL than the

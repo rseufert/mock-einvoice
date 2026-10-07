@@ -102,7 +102,7 @@ class AnInvoice(unittest.TestCase):
                           "BT-152": "19", "BT-146": "20.00", "BT-149": "1", "BT-150": "C62"})
         self.assertEqual([(v.text, v.attributes) for v in first.values("BT-158")],
                          [("31161500", {"listID": "STI"}),
-                          ("44531000", {"listID": "CPV", "listVersionID": "2008"})])
+                          ("44531000", {"listID": "TST", "listVersionID": "2008"})])
         attribute, = first.all("BG-32")
         self.assertEqual((attribute.text("BT-160"), attribute.text("BT-161")), ("Colour", "Grey"))
         self.assertEqual(second.term("BT-129").number, Decimal("2.5"))

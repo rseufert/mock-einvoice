@@ -71,7 +71,7 @@ jobs:
           python -m venv /tmp/wheel
           /tmp/wheel/bin/pip install dist/*.whl
           cd /tmp
-          /tmp/wheel/bin/python -c "import mockeinvoice, mockeinvoice.ubl, mockeinvoice.specification, mockeinvoice.rules.en16931; print(mockeinvoice.__version__, len(mockeinvoice.rules.REGISTRY['en16931']))"
+          /tmp/wheel/bin/python -c "import mockeinvoice, mockeinvoice.ubl, mockeinvoice.specification, mockeinvoice.rules.en16931, mockeinvoice.rules.codelists; print(mockeinvoice.__version__, len(mockeinvoice.rules.REGISTRY['en16931']))"
           test "$(/tmp/wheel/bin/pip list --format=freeze | grep -vicE '^(pip|setuptools|wheel|mock-einvoice)==')" = "0"
       # `publish.yml` refuses a release where these disagree. Asked here as
       # well, so that the day it is wrong is not the day of a release.
@@ -109,12 +109,17 @@ jobs:
           rm -rf dist-again && python -m build --sdist --outdir dist-again
           tar -tzf dist-again/*.tar.gz > /tmp/sdist-again.txt
           ! grep -E "samples/fetched|unit-UBL-PEPPOL" /tmp/sdist-again.txt
-      - name: The wheel carries the package and nothing else
+      # One file of the package is not MIT: the published rules' code lists,
+      # which are EUPL 1.2. Its licence is beside it wherever it goes.
+      - name: The wheel carries the package, the code lists' licence, and nothing else
         run: |
           set -eu
           python -m zipfile -l dist/*.whl > /tmp/wheel.txt
           cat /tmp/wheel.txt
-          ! grep -E "tests/|samples|EUPL" /tmp/wheel.txt
+          ! grep -E "tests/|samples" /tmp/wheel.txt
+          grep -q "mockeinvoice/rules/codelists.py" /tmp/wheel.txt
+          grep -q "mockeinvoice/rules/LICENSE-EUPL-1.2.txt" /tmp/wheel.txt
+          test "$(grep -c EUPL /tmp/wheel.txt)" = "1"
 
   # The one check `main` requires (docs/GITHUB.md). Its name is load-bearing:
   # the branch ruleset asks for "CI passed" by name, so add jobs to `needs`
