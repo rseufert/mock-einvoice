@@ -4,7 +4,19 @@ A mock e-invoicing partner: EN 16931 invoices in and out, with the responses tha
 
 A sibling of [mock-sap](https://github.com/rseufert/mock-sap), [mock-edi](https://github.com/rseufert/mock-edi) and [mock-bank](https://github.com/rseufert/mock-bank), and of [mock-acme](https://github.com/rseufert/mock-acme), the integration between them.
 
-**It is a mock that makes nothing up yet.** What is built reads and writes invoices, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to Peppol's own 63 and the 31 it has for Germany, and to the 34 of a standard XRechnung document. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones, and a supplier that sends them and takes the answers. The supplier sends the documents it is given and writes none of its own, and nothing in it knows what mock-sap has posted or paid. An XRechnung document, and a Peppol document from Germany or from a country Peppol has no national rules for, can be "valid". A Peppol document from Denmark, Greece, Iceland, Italy, the Netherlands, Norway or Sweden is at best "not judged" until those rules are built, and the server does not take it in. [#1](https://github.com/rseufert/mock-einvoice/issues/1) says what the first release is to be; nothing is on PyPI until then.
+```
+python3 -m pip install mock-einvoice
+mock-einvoice --port 8100
+```
+
+It reads and writes UBL invoices and credit notes, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to Peppol's own 63 and the 31 it has for Germany, and to the 34 of a standard XRechnung document; responses to all 82 of theirs. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones, and a supplier that sends them and takes the answers.
+
+**What 0.1.0 is not:**
+
+- **It writes no invoices of its own.** The supplier sends the documents it is given.
+- **It knows nothing of the other mocks.** Writing an invoice from one of mock-sap's billing documents, and saying "paid" when SAP has cleared it, is integration, and belongs in [mock-acme](https://github.com/rseufert/mock-acme) with the rest of it. It is not built there yet.
+- **A Peppol document from a seller in Denmark, Greece, Iceland, Italy, the Netherlands, Norway or Sweden is at best "not judged"**, and the server does not take it in: Peppol's 71 rules for those countries are not built ([#18](https://github.com/rseufert/mock-einvoice/issues/18)). An XRechnung document, and a Peppol document from Germany or from a country Peppol has no national rules for, can be "valid".
+- **No CII, no XRechnung Extension, no ZUGFeRD**, and no transport: see [What it refuses](#what-it-refuses) and [Known to be wrong, or not real](#known-to-be-wrong-or-not-real).
 
 ## What is built
 
