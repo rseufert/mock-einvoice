@@ -505,6 +505,13 @@ def parse(data: Union[bytes, str]) -> Tuple[Document, List[Finding]]:
     This is the syntax alone: it does not ask which specification the
     document claims. `mockeinvoice.read` does, and is what a caller wants.
     """
+    document, findings, _root = parse_tree(data)
+    return document, findings
+
+
+def parse_tree(data: Union[bytes, str]) -> Tuple[Document, List[Finding], Node]:
+    """`parse`, and the document's elements as they were sent: the rules
+    about the XML itself are asked of those."""
     root = tree(data)
     kind = next((k for k, namespace in ROOTS.items()
                  if root.tag == "{%s}%s" % (namespace, k)), None)
@@ -513,7 +520,7 @@ def parse(data: Union[bytes, str]) -> Tuple[Document, List[Finding]]:
     document = Document(kind=kind)
     reading = Reading(document, root)
     read_children(root, BINDINGS[kind], document, "/" + kind, reading)
-    return document, reading.findings
+    return document, reading.findings, root
 
 
 def not_ubl(root: Node) -> Tuple[str, str]:

@@ -88,7 +88,10 @@ class EachRuleFails(unittest.TestCase):
         "BR-16": (lambda text: text[:text.index("  <cac:InvoiceLine>")] + "</Invoice>",
                   ("BR-CO-10",)),
         "BR-17": (swap("<cac:Delivery>", PAYEE % "<cac:PartyIdentification><cbc:ID>77</cbc:ID>"
-                       "</cac:PartyIdentification>"), ()),
+                       "</cac:PartyIdentification>"),
+                  # Three rules compare a payee's name with the seller's, and
+                  # a name that is not there is not different from anything.
+                  ("UBL-SR-19", "UBL-SR-20", "UBL-SR-21")),
         "BR-18": (representative("<cac:PartyName><cbc:Name>Fiscal SARL</cbc:Name>"
                                  "</cac:PartyName>", ""), ()),
         "BR-19": (lambda text: cut(representative()(text), "<cac:PostalAddress><cbc:CityName>Lyon",
@@ -156,7 +159,7 @@ class EachRuleFails(unittest.TestCase):
                        "<cbc:BuyerReference>"), ()),
         "BR-54": (swap("<cbc:Value>Grey</cbc:Value>", ""), ()),
         "BR-55": (swap("<cac:AccountingSupplierParty>", "<cac:BillingReference/>"
-                       "<cac:AccountingSupplierParty>"), ()),
+                       "<cac:AccountingSupplierParty>"), ("UBL-SR-07",)),      # its twin
         "BR-56": (representative("<cbc:ID>VAT</cbc:ID>", "<cbc:ID>TAX</cbc:ID>"), ()),
         "BR-57": (swap("</cbc:ActualDeliveryDate>", "</cbc:ActualDeliveryDate>"
                        "<cac:DeliveryLocation><cac:Address><cbc:CityName>Berlin</cbc:CityName>"
@@ -366,7 +369,8 @@ class ThePayee(unittest.TestCase):
     def test_its_name_is_not_the_sellers_trading_name(self):
         self.assertEqual(self.payee(self.named("Globex")), ["BR-17"])
         # The seller's legal name is not what the test compares with.
-        self.assertEqual(self.payee(self.named("Globex GmbH")), [])
+        self.assertEqual(self.payee(self.named("Globex GmbH")),
+                         ["UBL-SR-19", "UBL-SR-20", "UBL-SR-21"])   # which other rules do
         self.assertEqual(self.payee(self.named("globex")), [])
         self.assertEqual(self.payee(self.named("Globex ")), [])
 
@@ -376,10 +380,12 @@ class ThePayee(unittest.TestCase):
         self.assertEqual(self.payee(self.identified("4012345000009", "0088") + name), ["BR-17"])
         self.assertEqual(self.payee(self.identified("4012345000010") + name), [])
         # The creditor identifier is an identifier like any other to this test.
+        # (Two creditor identifiers in one document is a rule of its own.)
         self.assertEqual(self.payee(self.identified("DE98ZZZ09999999999", "SEPA") + name),
-                         ["BR-17"])
+                         ["BR-17", "UBL-SR-29"])
         self.assertEqual(self.payee(self.identified("DE98ZZZ09999999999") + name), ["BR-17"])
-        self.assertEqual(self.payee(self.identified("DE98ZZZ0000", "SEPA") + name), [])
+        self.assertEqual(self.payee(self.identified("DE98ZZZ0000", "SEPA") + name),
+                         ["UBL-SR-29"])
 
 
 class ThePayment(unittest.TestCase):
@@ -408,7 +414,10 @@ class ThePayment(unittest.TestCase):
     def test_each_payment_instruction_is_asked(self):
         text = changed(INVOICE, "  <cac:PaymentTerms>", "<cac:PaymentMeans><cbc:PaymentMeansCode>"
                        "58</cbc:PaymentMeansCode></cac:PaymentMeans><cac:PaymentTerms>")
-        self.assertEqual(found(text), [("BR-61", "BG-16[2]")])
+        # And the two instructions do not name the same means, which is a rule.
+        self.assertEqual(found(text), [
+            ("BR-61", "BG-16[2]"),
+            ("UBL-SR-47", "/Invoice/cac:PaymentMeans[2]/cbc:PaymentMeansCode")])
 
     def test_ten_characters_of_a_card_number_are_not_too_many(self):
         def card(number):

@@ -4,7 +4,7 @@ A mock e-invoicing partner: EN 16931 invoices in and out, with the responses tha
 
 A sibling of [mock-sap](https://github.com/rseufert/mock-sap), [mock-edi](https://github.com/rseufert/mock-edi) and [mock-bank](https://github.com/rseufert/mock-bank), and of [mock-acme](https://github.com/rseufert/mock-acme), the integration between them.
 
-**It is not a mock yet.** What is built reads and writes invoices and holds them to the first 223 of the published rules. It has no server and answers nothing, and no document's verdict is "valid" until every fatal rule of its specification is built. [#1](https://github.com/rseufert/mock-einvoice/issues/1) says what the first release is to be; nothing is on PyPI until then.
+**It is not a mock yet.** What is built reads and writes invoices and holds them to all 979 rules of the EN 16931 core, and to none yet of the Peppol and XRechnung rules that sit on it. It has no server and answers nothing, and no document's verdict is "valid" until every fatal rule of its specification is built. [#1](https://github.com/rseufert/mock-einvoice/issues/1) says what the first release is to be; nothing is on PyPI until then.
 
 ## What is built
 
@@ -42,7 +42,8 @@ report.verdict                      # "invalid", or "not judged"
 for finding in report.failures:
     finding.code                    # "BR-CO-10": the rule's published identifier
     finding.level                   # "fatal": the flag its publisher gave it
-    finding.path                    # "BT-106": where, in the model
+    finding.path                    # "BT-106": where, in the model; or, for a rule about
+                                    # the XML itself, "/Invoice/cbc:UUID"
     finding.text                    # what the rule asks and what was found, in our words
     finding.link                    # where the rule itself is published
 report.ran                          # the rules that were run
@@ -55,11 +56,13 @@ A document names its specification, and that decides its layers:
 
 | Layer | Pinned to | Published rules | Built |
 | --- | --- | --- | --- |
-| EN 16931 core | [validation artefacts 1.3.16](https://github.com/ConnectingEurope/eInvoicing-EN16931/tree/validation-1.3.16) | 979 (281 fatal) | 223: every rule but those about the UBL document itself (`UBL-SR-*`, `UBL-DT-*`, `UBL-CR-*`). That is what a document must have in it (`BR-01` to `BR-65`), the calculation rules (`BR-CO-*`), the decimals rules (`BR-DEC-*`), the ten families of VAT category rules and the code lists (`BR-CL-*`) |
+| EN 16931 core | [validation artefacts 1.3.16](https://github.com/ConnectingEurope/eInvoicing-EN16931/tree/validation-1.3.16) | 979 (281 fatal) | all 979: what a document must have in it (`BR-01` to `BR-65`), the calculation rules (`BR-CO-*`), the decimals rules (`BR-DEC-*`), the ten families of VAT category rules, the code lists (`BR-CL-*`), and the 756 rules about the UBL document itself (`UBL-CR-*`, `UBL-DT-*`, `UBL-SR-*`) |
 | Peppol BIS Billing 3.0 | 3.0.21, at commit [`806866b`](https://github.com/OpenPEPPOL/peppol-bis-invoice-3/commit/806866bd2bd91d7e9623b68f08164e8fbe9e67a0) (it has no tag) | 166 (139 fatal) | none |
 | XRechnung 3.0 | [Schematron 2.6.0](https://github.com/itplr-kosit/xrechnung-schematron/tree/v2.6.0) | 55 (46 fatal) | none |
 
 **Not built is said, never assumed.** `mockeinvoice/rules/published.py` lists every published rule of every layer by identifier and flag, and a report lists the ones that did not run. A document nothing was found wrong with is `not judged`, not `valid`, for as long as a fatal rule of its layers is unbuilt. That is every document today.
+
+**Two things a rule is asked of.** Most rules are asked of the model. The 756 about the UBL document itself are asked of its elements, because they are about elements the standard has no term for and the model does not hold: `validate(xml)` asks them of the document as it was sent. `check(document, specification)`, given a model and no XML, asks them of the document that model would be written as. Where one of them reports an element, the reader's own finding about that element (`UNHELD`, `REPEATED`) is left out, so an element is reported once, under the published rule's name where there is one.
 
 **The arithmetic is the rules' own.** The published rules are XPath, and XPath rounds a tie towards positive infinity (`-2.5` is `-2`), which is neither Python's `round` nor half-up. A total that is absent is equal to nothing, so its rule fails. `mockeinvoice/rules/calculation.py` has both.
 
@@ -111,6 +114,8 @@ A group with nothing in it is still there: an empty `TaxSubtotal` is a VAT break
 - **The VAT category rules differ between families in ways that look like accidents**, and are built as published. `BR-AF-01`, `BR-AG-01`, `BR-AF-04` and both `BR-B` rules compare a category code as written where their siblings trim it. `BR-G` and `BR-IC` want the seller's VAT identifier where the others take any tax registration. `BR-S-08` can be met by the allowances and charges alone, without the lines. `rules/en16931_vat.py` names each where it is made.
 - **One unit of leeway on a taxable amount is measured as a double.** `BR-S-08`, `BR-AF-08` and `BR-AG-08` are published as `xs:decimal(cbc:TaxableAmount - 1)`, which subtracts in binary floating point: 100.10 less one is a hair under 99.10. At exactly one unit of difference the rule passes or fails by that, here as there. It is the one place a float is used; no amount is held as one.
 - **A code list rule is asked of the places the standard has for the code.** The published tests are on an element wherever it occurs: any `Country`, any `TaxCategory`. One in an element that is not held is not asked, and the reader has reported the element.
+- **Of the 756 rules about the UBL document, 747 have no unit test from their publisher.** They are held instead to a second reading of their paths by the standard library's own path language, which shares no code with this package's, over a document made for each path; and none of them fires on any of the 66 valid documents from the three publishers.
+- **A payee with no name fails three more rules than one would think** (`UBL-SR-19`, `-20`, `-21`): each compares the payee's name with the seller's legal name, and a name that is not there is not different from anything. Two payment instructions that name different payment means, or different payment references, fail `UBL-SR-47` and `UBL-SR-44`. Both are the published tests, built as published.
 - **Four rules are published twice.** `BR-CO-21` to `BR-CO-24` have the same test as `BR-33`, `BR-38`, `BR-42` and `BR-44`, so an allowance or charge with no reason fails two rules, as it does in a real validator.
 - **Six published rules cannot fail, here or anywhere.** `BR-CO-05` to `BR-CO-08` are published with the test `true()`. `BR-DEC-13` and `BR-DEC-15` compare a tax amount's currency with an element a tax amount does not have, so they select nothing and pass. They are built as published.
 - **A VAT rate under half a percent** rounds to nought in `BR-CO-17`, which then wants the tax to round to nought too. That is the published test, and it is built as published.
@@ -122,7 +127,7 @@ The rules, the reader and the writer are tested against files this project did n
 
 | Source, at the pinned version | What | How it comes out today |
 | --- | --- | --- |
-| EN 16931 unit tests | 1,137 cases, each a small document and what one rule should make of it | 1,094 agree, none disagree. One is in a document UBL's schema does not allow (a credit note with an invoice's line), where the reader does not hold the element the rule is about; it is counted apart. 32 are for the 9 rules with cases that are not built yet, and are compared with nothing. 12 name `BR-CO-25`, which the pinned rule file does not have. |
+| EN 16931 unit tests | 1,137 cases, each a small document and what one rule should make of it | 1,126 agree, none disagree. One is in a document UBL's schema does not allow (a credit note with an invoice's line), where the reader does not hold the element the rule is about; it is counted apart. 12 name `BR-CO-25`, which the pinned rule file does not have. Only 9 of the 756 rules about the UBL document have a published case. |
 | EN 16931 examples | 17 documents | read, written back, and compared element for element by a reader that is not this one |
 | XRechnung test suite | 39 valid XRechnung 3.0 documents | read with nothing to say, written back element for element, and no built rule fails |
 | XRechnung test suite | 5 Extension and 1 CVD document | refused by name |
@@ -142,7 +147,7 @@ Two things were checked while building and are not tests, because their sources 
 
 ## Licences
 
-The package is MIT, with one file that is not: `mockeinvoice/rules/codelists.py`. It holds the code lists of the EN 16931 code list rules (currencies, countries, units of measure and the rest), generated from the published rules by `tools/code_lists.py` and kept exactly as published. Those lists are from the EN 16931 validation artefacts and are under the EUPL 1.2, whose text is beside the file and goes into the wheel with it. One list more is in `rules/en16931.py`, the country prefixes `BR-CO-09` searches, and is from the same source. The wheel holds the package and nothing else.
+The package is MIT, with two files that are not. `mockeinvoice/rules/codelists.py` holds the code lists of the EN 16931 code list rules (currencies, countries, units of measure and the rest), generated from the published rules by `tools/code_lists.py` and kept exactly as published. `mockeinvoice/rules/ublsyntax.py` holds the paths of the rules about the UBL document itself, generated by `tools/ubl_syntax.py`. Both are from the EN 16931 validation artefacts and are under the EUPL 1.2, whose text is beside them and goes into the wheel with them. One list more is in `rules/en16931.py`, the country prefixes `BR-CO-09` searches, and is from the same source. The wheel holds the package and nothing else.
 
 The files under `tests/samples/external/` are other people's, copied unmodified, each directory with the licence its files are under and a README saying where they came from. They are in the repository and the source distribution, which is about 5 MB because of them.
 
