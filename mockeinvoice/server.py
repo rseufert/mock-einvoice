@@ -26,6 +26,11 @@ The supplier:
     GET   /_mock/sent/<id>              one, with its delivery and what came back
     GET   /_mock/sent/<id>/document     as it was sent
     GET   /_mock/answers/<id>           an Invoice Response it was given, as XML
+    POST  /_mock/orders                 tell it of an order, as JSON
+    GET   /_mock/orders                 the orders it was told of
+    GET   /_mock/orders/<id>            one, with what is billed of each line
+    POST  /_mock/orders/<id>/invoices   write the invoice for it, and send it
+    GET   /_mock/supplier, PATCH /_mock/supplier    who the supplier is
 
 And both:
 
@@ -43,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import decimal
 import json
 import re
 import urllib.error
@@ -57,7 +63,8 @@ from . import specification as _specification
 from .buyer import ANSWERS, Buyer, Held, NotSaid, Sent, TurnedAway, not_run
 from .model import Finding, Refused
 from .rules import Report, check, check_response
-from .supplier import Got, Issued, NotSent, Supplier
+from .order import NotTaken, Order
+from .supplier import Got, Issued, NotBilled, NotSent, Supplier
 from .ubl import parse_tree, tree
 
 PORT = 8100
@@ -65,6 +72,8 @@ LARGEST = 10 * 1024 * 1024         # of a request's body, in bytes
 XML = "application/xml; charset=utf-8"
 # The HTTP status for each reason a response is not given.
 NOT_SAID = {"NO-SUCH-INVOICE": 404, "REQUEST": 400, "INVALID": 422}
+# And for each reason an order is not billed.
+NOT_BILLED = {"NO-SUCH-ORDER": 404, "NO-SUCH-LINE": 404, "REQUEST": 400, "NOT-VALID": 422}
 
 
 def finding(found: Finding) -> dict:
@@ -121,11 +130,28 @@ def issued(one: Issued, full: bool = True) -> dict:
         "seller": document.text("BT-27"), "buyer": document.text("BT-44"),
         "sent": one.sent, "verdict": one.report.verdict, "forced": one.forced,
         "delivery": one.delivery, "status": one.status,
+        "order": "/_mock/orders/%s" % one.order if one.order else None,
     }
     if full:
         said["findings"] = [finding(found) for found in one.report.findings]
         said["responses"] = [got(heard) for heard in one.responses]
         said["document"] = "/_mock/sent/%s/document" % one.id
+    return said
+
+
+def ordered(order: Order, full: bool = True) -> dict:
+    said = {"id": order.id, "number": order.number, "reference": order.reference,
+            "buyer": order.buyer["name"], "received": order.received, "status": order.status}
+    if full:
+        said["buyer"] = order.buyer
+        said["currency"] = order.currency
+        said["lines"] = [
+            {"line": line.line, "name": line.name, "seller_item": line.seller_item,
+             "buyer_item": line.buyer_item, "quantity": format(line.quantity, "f"),
+             "unit": line.unit, "price": format(line.price, "f"),
+             "billed": format(line.billed, "f"), "open": format(line.open, "f")}
+            for line in order.lines]
+        said["invoices"] = ["/_mock/sent/%s" % one for one in order.invoices]
     return said
 
 
@@ -181,6 +207,12 @@ ROUTES: List[Tuple[str, "re.Pattern[str]", str]] = [
         ("GET", r"/_mock/sent/(\d+)", "one_sent"),
         ("GET", r"/_mock/sent/(\d+)/document", "sent_document"),
         ("GET", r"/_mock/answers/(\d+)", "answer_document"),
+        ("POST", "/_mock/orders", "take_order"),
+        ("GET", "/_mock/orders", "orders"),
+        ("GET", r"/_mock/orders/(\d+)", "order"),
+        ("POST", r"/_mock/orders/(\d+)/invoices", "bill"),
+        ("GET", "/_mock/supplier", "who"),
+        ("PATCH", "/_mock/supplier", "describe"),
         ("GET", "/_mock/health", "health"),
         ("GET", "/_mock/turned-away", "turned_away"),
         ("POST", "/_mock/validate", "validate"),
@@ -247,12 +279,18 @@ class Handler(BaseHTTPRequestHandler):
                           % (length, LARGEST))
         return self.rfile.read(int(length))
 
-    def asked(self, allowed: Sequence[str]) -> dict:
-        """The request's body as a JSON object with only these keys."""
+    def said(self) -> object:
+        """The request's body as JSON, with a number that has a fraction read
+        as the decimal it was written as: no amount goes through a float."""
         try:
-            said = json.loads(self.body().decode("utf-8") or "{}")
+            return json.loads(self.body().decode("utf-8") or "{}",
+                              parse_float=decimal.Decimal)
         except (UnicodeDecodeError, ValueError) as wrong:
             raise Problem(400, "NOT-JSON", "the request is not JSON: %s" % wrong)
+
+    def asked(self, allowed: Sequence[str]) -> dict:
+        """The request's body as a JSON object with only these keys."""
+        said = self.said()
         if not isinstance(said, dict):
             raise Problem(400, "REQUEST", "the request is a JSON object, not %s"
                           % type(said).__name__)
@@ -369,6 +407,55 @@ class Handler(BaseHTTPRequestHandler):
             raise Problem(404, "NO-SUCH-RESPONSE", "no response %s was received" % identifier)
         self.send(200, XML, heard.xml)
 
+    def take_order(self) -> None:
+        try:
+            order = self.supplier.take(self.said())
+        except NotTaken as no:
+            if no.report:
+                raise Problem(422, "UNBILLABLE", no.reason, **reported(no.report))
+            raise Problem(400, "REQUEST", no.reason)
+        self.json(201, ordered(order), Location="/_mock/orders/%s" % order.id)
+
+    def orders(self) -> None:
+        with self.supplier.lock:
+            self.json(200, [ordered(order, full=False)
+                            for order in self.supplier.orders.values()])
+
+    def order(self, identifier: str) -> None:
+        with self.supplier.lock:
+            order = self.supplier.orders.get(identifier)
+            if order is None:
+                raise Problem(404, "NO-SUCH-ORDER", "no order %s was taken" % identifier)
+            self.json(200, ordered(order))
+
+    def bill(self, identifier: str) -> None:
+        lines = self.asked(("lines",)).get("lines")
+        if lines is not None and not (
+                isinstance(lines, list)
+                and all(isinstance(one, dict) and set(one) == {"line", "quantity"}
+                        and isinstance(one["line"], str) for one in lines)):
+            raise Problem(400, "REQUEST", "lines is a list, each {\"line\", \"quantity\"}: "
+                                          "a line of the order by its number, and how much "
+                                          "of it to bill")
+        if lines is not None and len({one["line"] for one in lines}) < len(lines):
+            raise Problem(400, "REQUEST", "a line is named twice")
+        try:
+            one = self.supplier.bill(identifier, None if lines is None else {
+                one["line"]: one["quantity"] for one in lines})
+        except NotBilled as no:
+            more = reported(no.report) if no.report else {}
+            raise Problem(NOT_BILLED.get(no.code, 409), no.code, no.reason, **more)
+        self.json(201, issued(one), Location="/_mock/sent/%s" % one.id)
+
+    def who(self) -> None:
+        self.json(200, self.supplier.who)
+
+    def describe(self) -> None:
+        try:
+            self.json(200, self.supplier.describe(self.said()))
+        except NotTaken as no:
+            raise Problem(400, "REQUEST", no.reason)
+
     def health(self) -> None:
         self.json(200, {"status": "ok", "version": __version__,
                         "held": len(self.buyer.invoices), "sent": len(self.supplier.sent)})
@@ -437,7 +524,8 @@ def arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         description="A mock buyer and supplier. As a buyer it takes UBL invoices and credit "
                     "notes in over HTTP, holds them to EN 16931, Peppol BIS Billing 3.0 "
                     "and XRechnung 3.0, and answers the Peppol ones with Invoice "
-                    "Responses. As a supplier it sends them and takes the responses.")
+                    "Responses. As a supplier it sends them, writes the invoice for "
+                    "an order it is told of, and takes the responses.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=PORT, help="default %d" % PORT)
     parser.add_argument("--seller-url", metavar="URL",

@@ -19,6 +19,7 @@ from mockeinvoice.supplier import Supplier
 
 from . import sample, unbuilt
 from .test_buyer import INVOICE, WITH_RESPONSE, XRECHNUNG
+from .test_order import ORDER, buyer, lines, order
 
 NOON = datetime.datetime(2026, 10, 7, 12, 0, 30)
 REJECTED = {"code": "RE", "reasons": [{"code": "REF", "text": "no purchase order",
@@ -156,7 +157,8 @@ class TheMocksSide(Served):
         self.assertEqual((body["mock"], body["version"], body["sides"], body["answers"]),
                          ("mock-einvoice", __version__, ["buyer", "supplier"], "required"))
         self.assertIn("POST /_mock/invoices/<id>/responses", body["paths"])
-        self.assertEqual(len(body["paths"]), 19)
+        self.assertIn("POST /_mock/orders/<id>/invoices", body["paths"])
+        self.assertEqual(len(body["paths"]), 25)
 
     def test_health_is_what_the_other_mocks_answer_too(self):
         self.call("POST", "/_mock/sent", INVOICE)
@@ -299,7 +301,7 @@ class TheSupplier(unittest.TestCase):
             "type": "380", "specification": "peppol", "seller": "Globex GmbH",
             "buyer": "ACME Corporation", "sent": "2026-10-07T12:00:30", "verdict": "valid",
             "forced": False, "delivery": {"to": self.buyers + "/invoices", "status": 201},
-            "status": "", "findings": [], "responses": [],
+            "status": "", "order": None, "findings": [], "responses": [],
             "document": "/_mock/sent/1/document"})
         self.assertEqual(self.at_the_buyer("GET", "/_mock/invoices/1/document")[2],
                          INVOICE.encode("utf-8"))
@@ -391,6 +393,148 @@ class TheSupplier(unittest.TestCase):
         self.assertEqual((self.call("GET", "/_mock/sent")[2],
                           self.call("GET", "/_mock/turned-away")[2],
                           self.call("GET", "/_mock/answers/1")[0]), ([], [], 404))
+
+    def test_an_order_is_taken_billed_and_held_by_the_buyer(self):
+        status, headers, body = self.call("POST", "/_mock/orders", ORDER)
+        self.assertEqual((status, headers["Location"]), (201, "/_mock/orders/1"))
+        self.assertEqual(body, {
+            "id": "1", "number": "4500000017", "reference": "", "buyer": ORDER["buyer"],
+            "received": "2026-10-07T12:00:30", "status": "open", "currency": "",
+            "lines": [
+                {"line": "10", "name": "Widget", "seller_item": "W-100", "buyer_item": "",
+                 "quantity": "40", "unit": "C62", "price": "20.00", "billed": "0",
+                 "open": "40"},
+                {"line": "20", "name": "Installation", "seller_item": "", "buyer_item": "",
+                 "quantity": "2.5", "unit": "HUR", "price": "33.333", "billed": "0",
+                 "open": "2.5"}],
+            "invoices": []})
+        self.assertEqual((self.call("GET", "/_mock/sent")[2],
+                          self.at_the_buyer("GET", "/_mock/invoices")[2]), ([], []))
+        status, headers, body = self.call("POST", "/_mock/orders/1/invoices", b"")
+        self.assertEqual((status, headers["Location"]), (201, "/_mock/sent/1"))
+        self.assertEqual(body, {
+            "id": "1", "kind": "Invoice", "number": "GLX-0001", "issued": "2026-10-07",
+            "type": "380", "specification": "peppol", "seller": "Globex GmbH",
+            "buyer": "ACME Corporation", "sent": "2026-10-07T12:00:30", "verdict": "valid",
+            "forced": False, "delivery": {"to": self.buyers + "/invoices", "status": 201},
+            "status": "", "order": "/_mock/orders/1", "findings": [], "responses": [],
+            "document": "/_mock/sent/1/document"})
+        held = self.at_the_buyer("GET", "/_mock/invoices/1")[2]
+        self.assertEqual((held["number"], held["verdict"], held["seller"]),
+                         ("GLX-0001", "valid", "Globex GmbH"))
+        self.assertEqual(self.at_the_buyer("GET", "/_mock/invoices/1/document")[2],
+                         self.call("GET", "/_mock/sent/1/document")[2])
+        self.assertIn(b"<cbc:ID>4500000017</cbc:ID>",
+                      self.call("GET", "/_mock/sent/1/document")[2])
+        taken = self.call("GET", "/_mock/orders/1")[2]
+        self.assertEqual((taken["status"], taken["invoices"],
+                          [line["open"] for line in taken["lines"]]),
+                         ("billed", ["/_mock/sent/1"], ["0", "0.0"]))
+        self.assertEqual(self.call("GET", "/_mock/orders")[2], [
+            {"id": "1", "number": "4500000017", "reference": "", "buyer": "ACME Corporation",
+             "received": "2026-10-07T12:00:30", "status": "billed"}])
+
+    def test_what_the_buyer_says_of_an_invoice_written_here_comes_back(self):
+        self.call("POST", "/_mock/orders", ORDER)
+        self.call("POST", "/_mock/orders/1/invoices", {})
+        self.at_the_buyer("POST", "/_mock/invoices/1/responses", {"code": "AP"})
+        self.assertEqual(self.call("GET", "/_mock/sent/1")[2]["status"], "AP")
+
+    def test_an_order_billed_in_parts(self):
+        self.call("POST", "/_mock/orders", ORDER)
+        asked = {"lines": [{"line": "10", "quantity": 15}, {"line": "20", "quantity": 0.5}]}
+        status, _headers, body = self.call("POST", "/_mock/orders/1/invoices", asked)
+        self.assertEqual((status, body["number"]), (201, "GLX-0001"))
+        taken = self.call("GET", "/_mock/orders/1")[2]
+        self.assertEqual((taken["status"], [(line["billed"], line["open"])
+                                            for line in taken["lines"]]),
+                         ("billed in part", [("15", "25"), ("0.5", "2.0")]))
+        status, _headers, body = self.call("POST", "/_mock/orders/1/invoices", asked["lines"])
+        self.assertEqual((status, body["error"]), (400, "REQUEST"))
+        for lines_asked, got, code in (
+                ([{"line": "10", "quantity": 26}], 409, "OVER-BILLED"),
+                ([{"line": "30", "quantity": 1}], 404, "NO-SUCH-LINE"),
+                ([{"line": "10", "quantity": "0"}], 400, "REQUEST"),
+                ([{"line": "10", "quantity": 1}, {"line": "10", "quantity": 1}], 400, "REQUEST"),
+                ([{"line": "10"}], 400, "REQUEST"),
+                ([{"line": 10, "quantity": 1}], 400, "REQUEST"),
+                ([], 400, "REQUEST"),
+                ("10", 400, "REQUEST")):
+            status, _headers, body = self.call("POST", "/_mock/orders/1/invoices",
+                                               {"lines": lines_asked})
+            self.assertEqual((status, body["error"]), (got, code), lines_asked)
+        self.assertEqual(self.call("POST", "/_mock/orders/1/invoices", {"force": True})[0], 400)
+        self.assertEqual(self.call("POST", "/_mock/orders/1/invoices", {})[2]["number"],
+                         "GLX-0002")
+        status, _headers, body = self.call("POST", "/_mock/orders/1/invoices", {})
+        self.assertEqual((status, body["error"], body["reason"]),
+                         (409, "BILLED", "order 4500000017 is billed in full, by GLX-0001 "
+                                         "and GLX-0002"))
+        self.assertEqual(len(self.call("GET", "/_mock/sent")[2]), 2)
+
+    def test_an_order_that_is_not_taken(self):
+        for said, got, code in ((order(delivery="tomorrow"), 400, "REQUEST"),
+                                (lines({"price": "dear"}), 400, "REQUEST"),
+                                ([ORDER], 400, "REQUEST"),
+                                ("{", 400, "NOT-JSON"),
+                                (buyer(postal_code=None), 422, "UNBILLABLE")):
+            status, _headers, body = self.call("POST", "/_mock/orders", said)
+            self.assertEqual((status, body["error"]), (got, code), said)
+        self.assertEqual((body["verdict"], [found["code"] for found in body["findings"]]),
+                         ("invalid", ["DE-R-009"]))
+        self.assertEqual(self.call("GET", "/_mock/orders")[2], [])
+        for method, path in (("GET", "/_mock/orders/1"), ("POST", "/_mock/orders/1/invoices")):
+            status, _headers, body = self.call(method, path, b"" if method == "POST" else None)
+            self.assertEqual((status, body["error"]), (404, "NO-SUCH-ORDER"))
+
+    def test_a_price_with_a_fraction_written_as_a_number_is_the_price_as_written(self):
+        # 0.1 and 0.7 are not what a float holds; 3 at 0.1 would be 0.30000000000000004.
+        self.call("POST", "/_mock/orders", json.dumps(
+            lines({"quantity": 3, "price": 0.1}, {"line": "20", "quantity": 0.7, "price": 1})))
+        taken = self.call("GET", "/_mock/orders/1")[2]
+        self.assertEqual([(line["quantity"], line["price"]) for line in taken["lines"]],
+                         [("3", "0.1"), ("0.7", "1")])
+        self.call("POST", "/_mock/orders/1/invoices", b"")
+        document = self.call("GET", "/_mock/sent/1/document")[2]
+        self.assertIn(b'<cbc:PriceAmount currencyID="EUR">0.1</cbc:PriceAmount>', document)
+        self.assertIn(b'<cbc:PayableAmount currencyID="EUR">1.19</cbc:PayableAmount>', document)
+
+    def test_who_the_supplier_is_and_changing_it(self):
+        status, _headers, body = self.call("GET", "/_mock/supplier")
+        self.assertEqual((status, body["name"], body["vat_rate"], body["payment_days"]),
+                         (200, "Globex GmbH", "19", 30))
+        self.assertEqual(sorted(body), sorted(
+            ["name", "endpoint", "vat", "legal_id", "street", "city", "postal_code", "country",
+             "contact", "telephone", "email", "iban", "bic", "currency", "vat_rate",
+             "payment_days", "number_prefix"]))
+        status, _headers, body = self.call("PATCH", "/_mock/supplier", {
+            "name": "Initech AG", "vat_rate": 7.5, "payment_days": 10, "number_prefix": "INI-"})
+        self.assertEqual((status, body["name"], body["vat_rate"], body["city"]),
+                         (200, "Initech AG", "7.5", "Hamburg"))
+        self.assertEqual(self.call("GET", "/_mock/supplier")[2], body)
+        self.call("POST", "/_mock/orders", ORDER)
+        sent = self.call("POST", "/_mock/orders/1/invoices", b"")[2]
+        self.assertEqual((sent["number"], sent["seller"]), ("INI-0001", "Initech AG"))
+        document = self.call("GET", "/_mock/sent/1/document")[2]
+        self.assertIn(b"<cbc:DueDate>2026-10-17</cbc:DueDate>", document)
+        self.assertIn(b"<cbc:Percent>7.5</cbc:Percent>", document)
+        for changes in ({"fax": "1"}, {"vat_rate": 0}, {"payment_days": 1.5}, ["Initech"]):
+            status, _headers, body = self.call("PATCH", "/_mock/supplier", changes)
+            self.assertEqual((status, body["error"]), (400, "REQUEST"), changes)
+        self.call("POST", "/_mock/reset", b"")
+        self.assertEqual((self.call("GET", "/_mock/supplier")[2]["name"],
+                          self.call("GET", "/_mock/orders")[2]), ("Initech AG", []))
+
+    def test_a_supplier_changed_so_that_its_invoice_is_not_valid_does_not_send_it(self):
+        self.call("POST", "/_mock/orders", ORDER)
+        self.call("PATCH", "/_mock/supplier", {"vat": ""})
+        status, _headers, body = self.call("POST", "/_mock/orders/1/invoices", b"")
+        self.assertEqual((status, body["error"], body["verdict"]), (422, "NOT-VALID", "invalid"))
+        self.assertTrue(body["findings"])
+        self.assertEqual((self.call("GET", "/_mock/sent")[2],
+                          self.call("GET", "/_mock/orders/1")[2]["status"]), ([], "open"))
+        status, _headers, body = self.call("POST", "/_mock/orders", order(number="2"))
+        self.assertEqual((status, body["error"]), (422, "UNBILLABLE"))
 
     def test_with_no_buyer_there_the_document_is_recorded_all_the_same(self):
         self.buying.shutdown()

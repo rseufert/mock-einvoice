@@ -8,7 +8,37 @@ says so where it does.
 
 ## [Unreleased]
 
-Nothing yet.
+The supplier writes an invoice itself. Nothing changes for a document sent
+with `POST /_mock/sent`, but for one key more in what is said of it.
+
+### Added
+
+- **A supplier that is told of an order, and writes and sends the invoice for
+  it** ([#33]). `POST /_mock/orders` takes an order as JSON, and
+  `POST /_mock/orders/<id>/invoices` writes a Peppol BIS Billing 3.0 invoice
+  for it, holds it to its rules, and sends it to `--buyer-url` like any other;
+  for all of the order, or for so much of some of its lines. The invoice
+  names the order (BT-13) and each line's order line (BT-132). In Python,
+  `Supplier.take` and `Supplier.bill`, and `mockeinvoice.order`.
+  - An order is this mock's own JSON and not Peppol's UBL `Order`, whose
+    rules are not built.
+  - Who is selling, where to pay, the rate of VAT, the days until payment and
+    the invoice numbers are the supplier's own: `GET` and
+    `PATCH /_mock/supplier`. Until it is changed it is the seller of this
+    project's sample invoice, and what it writes is `valid`.
+  - An order whose invoice would not be `valid` is not taken
+    (`422 UNBILLABLE`, with the findings).
+  - Every line is VAT category `S` at the supplier's one rate. No allowances,
+    charges, credit notes or XRechnung. The README lists what is made up, and
+    from what.
+
+### Changed
+
+- **A document that was sent says which order it was written for**:
+  `"order"` in `POST /_mock/sent`, `GET /_mock/sent` and `/_mock/sent/<id>`,
+  `null` for one that was given finished. `GET /` lists six paths more.
+- A JSON number with a fraction in a request is read as the decimal it was
+  written as, and not as a float. No request took such a number before.
 
 ## [0.2.0] - 2026-10-07
 
@@ -246,3 +276,4 @@ built, and was in no release.
 [#23]: https://github.com/rseufert/mock-einvoice/issues/23
 [#25]: https://github.com/rseufert/mock-einvoice/issues/25
 [#27]: https://github.com/rseufert/mock-einvoice/issues/27
+[#33]: https://github.com/rseufert/mock-einvoice/issues/33
