@@ -15,19 +15,82 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # There is no package yet. This job is the place the test matrix goes when
-  # there is one; until then it checks that whatever Python is here compiles.
-  compile:
-    name: byte-compile
+  test:
+    name: tests (py${{ matrix.python }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 3.8 is not in the tool cache on ubuntu-latest any more
+          - {os: ubuntu-22.04, python: "3.8"}
+          - {os: ubuntu-latest, python: "3.9"}
+          - {os: ubuntu-latest, python: "3.10"}
+          - {os: ubuntu-latest, python: "3.11"}
+          - {os: ubuntu-latest, python: "3.12"}
+          - {os: ubuntu-latest, python: "3.13"}
+          - {os: ubuntu-latest, python: "3.14"}
+          - {os: macos-latest, python: "3.12"}
+          - {os: windows-latest, python: "3.12"}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Byte-compile every module
+        run: python -m compileall -q mockeinvoice tests
+      - name: Run the tests
+        run: python -X faulthandler -m unittest discover -s tests -t . -v
+
+  package:
+    name: package builds and installs
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - name: Byte-compile every module
-        run: python -m compileall -q .
+      - run: python -m pip install --upgrade pip build twine
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - name: The wheel installs with nothing else and imports
+        run: |
+          set -eu
+          python -m venv /tmp/wheel
+          /tmp/wheel/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/wheel/bin/python -c "import mockeinvoice, mockeinvoice.ubl, mockeinvoice.specification; print(mockeinvoice.__version__)"
+          test "$(/tmp/wheel/bin/pip list --format=freeze | grep -vicE '^(pip|setuptools|wheel|mock-einvoice)==')" = "0"
+      # `publish.yml` refuses a release where these disagree. Asked here as
+      # well, so that the day it is wrong is not the day of a release.
+      - name: pyproject.toml and the built package say the same version
+        run: |
+          set -eu
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          BUILT=$(cd /tmp && /tmp/wheel/bin/python -c "import mockeinvoice; print(mockeinvoice.__version__)")
+          echo "pyproject=$VERSION built=$BUILT"
+          test "$BUILT" = "$VERSION"
+      # The published examples are under their own licences, so wherever
+      # they go their licence goes with them, and they stay out of the wheel.
+      - name: The sdist carries the tests, the samples and the samples' licences
+        run: |
+          set -eu
+          tar -tzf dist/*.tar.gz > /tmp/sdist.txt
+          for wanted in CHANGELOG.md tests/__init__.py tests/test_writing.py \
+              tests/samples/peppol-invoice.xml \
+              tests/samples/external/en16931/README.md \
+              tests/samples/external/en16931/LICENSE-EUPL-1.2.txt \
+              tests/samples/external/en16931/ubl-tc434-example1.xml; do
+            grep -q "/$wanted\$" /tmp/sdist.txt || { echo "missing from the sdist: $wanted"; exit 1; }
+          done
+      - name: The wheel carries the package and nothing else
+        run: |
+          set -eu
+          python -m zipfile -l dist/*.whl > /tmp/wheel.txt
+          cat /tmp/wheel.txt
+          ! grep -E "tests/|samples|EUPL" /tmp/wheel.txt
 
   # The one check `main` requires (docs/GITHUB.md). Its name is load-bearing:
   # the branch ruleset asks for "CI passed" by name, so add jobs to `needs`
@@ -38,7 +101,7 @@ jobs:
   all:
     name: CI passed
     if: always()
-    needs: [compile]
+    needs: [test, package]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
