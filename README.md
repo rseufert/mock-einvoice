@@ -4,7 +4,7 @@ A mock e-invoicing partner: EN 16931 invoices in and out, with the responses tha
 
 A sibling of [mock-sap](https://github.com/rseufert/mock-sap), [mock-edi](https://github.com/rseufert/mock-edi) and [mock-bank](https://github.com/rseufert/mock-bank), and of [mock-acme](https://github.com/rseufert/mock-acme), the integration between them.
 
-**It is not a mock yet.** What is built reads and writes invoices and holds them to all 979 rules of the EN 16931 core and to Peppol's own 63, and to none yet of the rules Peppol has for a seller's country or of XRechnung's. It has no server and answers nothing. A Peppol document from a country Peppol has no national rules for can be "valid"; one from Germany or six other countries, and every XRechnung document, is at best "not judged" until those rules are built. [#1](https://github.com/rseufert/mock-einvoice/issues/1) says what the first release is to be; nothing is on PyPI until then.
+**It is not a mock yet.** What is built reads and writes invoices and holds them to all 979 rules of the EN 16931 core, to Peppol's own 63 and to the 31 Peppol has for Germany. It has no server and answers nothing. A Peppol document from Germany, or from a country Peppol has no national rules for, can be "valid". One from Denmark, Greece, Iceland, Italy, the Netherlands, Norway or Sweden, and every XRechnung document, is at best "not judged" until those rules are built. [#1](https://github.com/rseufert/mock-einvoice/issues/1) says what the first release is to be; nothing is on PyPI until then.
 
 ## What is built
 
@@ -58,7 +58,7 @@ A document names its specification, and that decides its layers:
 | Layer | Pinned to | Published rules | Built |
 | --- | --- | --- | --- |
 | EN 16931 core | [validation artefacts 1.3.16](https://github.com/ConnectingEurope/eInvoicing-EN16931/tree/validation-1.3.16) | 979 (281 fatal) | all 979: what a document must have in it (`BR-01` to `BR-65`), the calculation rules (`BR-CO-*`), the decimals rules (`BR-DEC-*`), the ten families of VAT category rules, the code lists (`BR-CL-*`), and the 756 rules about the UBL document itself (`UBL-CR-*`, `UBL-DT-*`, `UBL-SR-*`) |
-| Peppol BIS Billing 3.0 | 3.0.21, at commit [`806866b`](https://github.com/OpenPEPPOL/peppol-bis-invoice-3/commit/806866bd2bd91d7e9623b68f08164e8fbe9e67a0) (it has no tag) | 165 (139 fatal) | 63: Peppol's own (`PEPPOL-EN16931-*`, `PEPPOL-COMMON-*`). Not the 102 for a seller's country (`DE-R`, `DK-R`, `GR-R`, `IS-R`, `IT-R`, `NL-R`, `NO-R`, `SE-R`) |
+| Peppol BIS Billing 3.0 | 3.0.21, at commit [`806866b`](https://github.com/OpenPEPPOL/peppol-bis-invoice-3/commit/806866bd2bd91d7e9623b68f08164e8fbe9e67a0) (it has no tag) | 165 (139 fatal) | 94: Peppol's own 63 (`PEPPOL-EN16931-*`, `PEPPOL-COMMON-*`) and Germany's 31 (`DE-R-*`). Not the 71 for a seller in another country (`DK-R`, `GR-R`, `IS-R`, `IT-R`, `NL-R`, `NO-R`, `SE-R`) |
 | XRechnung 3.0 | [Schematron 2.6.0](https://github.com/itplr-kosit/xrechnung-schematron/tree/v2.6.0) | 56 (46 fatal) | none |
 
 **Not built is said, never assumed.** `mockeinvoice/rules/published.py` lists every published rule of every layer by identifier and flag, and a report lists the ones that did not run. A document nothing was found wrong with is `not judged`, not `valid`, for as long as a fatal rule that could apply to it is unbuilt.
@@ -121,6 +121,7 @@ A group with nothing in it is still there: an empty `TaxSubtotal` is a VAT break
 - **A payee with no name fails three more rules than one would think** (`UBL-SR-19`, `-20`, `-21`): each compares the payee's name with the seller's legal name, and a name that is not there is not different from anything. Two payment instructions that name different payment means, or different payment references, fail `UBL-SR-47` and `UBL-SR-44`. Both are the published tests, built as published.
 - **Peppol takes `true` and `false` for a charge indicator, and not `1` and `0`**, which the core takes. An allowance marked `0` fails `PEPPOL-EN16931-R043` and is left out of its line's net amount by `PEPPOL-EN16931-R120`. Built as published.
 - **A price divided by its base quantity** (`PEPPOL-EN16931-R120`) is computed to 60 significant digits here; XPath leaves the precision to the implementation. The rule allows two cents either way.
+- **Peppol's rules for Germany are asked only where seller and buyer are both in Germany.** A German seller invoicing a buyer abroad is asked none of them. Its IBAN checks (`DE-R-019`, `DE-R-020`) are warnings, asked of SEPA transfers and direct debits only, and read a small letter in an IBAN as another number than its capital. A cash discount line in the payment terms has to end in a line break (`DE-R-018`). All as published.
 - **Four rules are published twice.** `BR-CO-21` to `BR-CO-24` have the same test as `BR-33`, `BR-38`, `BR-42` and `BR-44`, so an allowance or charge with no reason fails two rules, as it does in a real validator.
 - **Six published rules cannot fail, here or anywhere.** `BR-CO-05` to `BR-CO-08` are published with the test `true()`. `BR-DEC-13` and `BR-DEC-15` compare a tax amount's currency with an element a tax amount does not have, so they select nothing and pass. They are built as published.
 - **A VAT rate under half a percent** rounds to nought in `BR-CO-17`, which then wants the tax to round to nought too. That is the published test, and it is built as published.
@@ -136,7 +137,7 @@ The rules, the reader and the writer are tested against files this project did n
 | EN 16931 examples | 17 documents | read, written back, and compared element for element by a reader that is not this one |
 | XRechnung test suite | 39 valid XRechnung 3.0 documents | read with nothing to say, written back element for element, and no built rule fails |
 | XRechnung test suite | 5 Extension and 1 CVD document | refused by name |
-| Peppol unit tests | 400 cases | 331 agree, none disagree. 65 are for Germany's rules, which are not built, and 4 are about a UBL Order |
+| Peppol unit tests | 400 cases | all 396 agree: 331 for Peppol's own rules and 65 for Germany's. The other 4 are about a UBL Order |
 | Peppol examples | 10 documents | read with nothing to say, written back element for element, and no rule has anything to say of them. Nine are `valid`; the tenth is from a seller in Sweden, whose rules are not built, and is `not judged` |
 
 - **A case for a rule that is not built is never counted as agreeing.** The counts are written out in `tests/test_upstream.py`, so building a rule moves a number there on purpose.

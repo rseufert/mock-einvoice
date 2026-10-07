@@ -485,7 +485,7 @@ class WhatTheReaderSaidAndWhatARuleSays(unittest.TestCase):
         self.assertEqual([(f.level, f.code, f.path) for f in report.findings],
                          [("warning", "UNHELD", "/Invoice/cbc:UBLVersionID"),
                           ("warning", "UBL-CR-005", "/Invoice/cbc:UUID")])
-        self.assertEqual(report.verdict, "not judged")
+        self.assertEqual(report.verdict, "valid")       # warnings, both of them
 
     def test_one_inside_an_unheld_element_covers_it(self):
         text = changed(INVOICE, "<cac:PaymentTerms>", "<cac:PaymentTerms><cac:SettlementPeriod>"

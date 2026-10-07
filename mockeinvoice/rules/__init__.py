@@ -224,5 +224,6 @@ from . import en16931_codes as _en16931_codes  # noqa: E402,F401
 from . import en16931_ubl as _en16931_ubl  # noqa: E402,F401
 from . import en16931_vat as _en16931_vat  # noqa: E402,F401
 from . import peppol as _peppol  # noqa: E402,F401
+from . import peppol_de as _peppol_de  # noqa: E402,F401
 
 SCOPES["peppol"].update(_peppol.SCOPES)

@@ -158,11 +158,9 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertEqual(disagreements, [])
         self.assertEqual(dict(counts), {
             "files": 90, "cases": 400, "expectations": 396,
-            "agree": 331,           # every case for Peppol's own rules
-            "not built": 65,        # Germany's rules, which are not built yet
+            "agree": 396,           # every case, for Peppol's own rules and Germany's
             "not ours": 4})         # documents that are not an invoice or credit note
-        self.assertEqual(len(not_built), 31)
-        self.assertTrue(all(identifier.startswith("DE-R-") for identifier in not_built))
+        self.assertEqual(not_built, {})
 
     def test_the_list_of_peppols_files_is_the_examples_and_two_sets_of_unit_tests(self):
         import importlib.util
