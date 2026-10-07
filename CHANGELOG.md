@@ -11,10 +11,21 @@ says so where it does.
 Nothing is released yet. What is here reads and writes invoices and holds them
 to every rule of the EN 16931 core, to Peppol's own rules and its rules for
 Germany, and to XRechnung's; and over HTTP it is a buyer that takes them in
-and answers.
+and answers, and a supplier that sends them.
 
 ### Added
 
+- **The server, as a supplier** ([#27]): `POST /_mock/sent` sends a UBL
+  invoice or credit note to `--buyer-url`, after holding it to its rules; one
+  that is not `valid` is not sent unless `?force=true`. `POST /responses`
+  takes a Peppol Invoice Response, holds it to its 82 rules, and finds the
+  document it is about by number and type code; the document's status is the
+  last thing its buyer said. A response that comes out of the order Peppol's
+  guide gives is taken and ignored, as the guide says a seller may, and is
+  marked with the rule. One process is buyer and supplier both, and two can
+  be pointed at each other. The supplier writes no invoices of its own.
+  `GET /` now says `"sides"`, and each entry of `/_mock/turned-away` says
+  which side turned it away.
 - **The server, as a buyer** ([#25]): `mock-einvoice --port 8100`, or
   `python -m mockeinvoice`. `POST /invoices` takes a UBL invoice or credit
   note in if it is `valid`, and turns it away with its findings if it is
@@ -182,3 +193,4 @@ and answers.
 [#19]: https://github.com/rseufert/mock-einvoice/issues/19
 [#23]: https://github.com/rseufert/mock-einvoice/issues/23
 [#25]: https://github.com/rseufert/mock-einvoice/issues/25
+[#27]: https://github.com/rseufert/mock-einvoice/issues/27

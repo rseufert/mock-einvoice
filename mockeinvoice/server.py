@@ -1,26 +1,41 @@
-"""The mock over HTTP: a buyer that invoices are sent to.
+"""The mock over HTTP: a buyer that invoices are sent to, and a supplier
+that sends them.
 
     mock-einvoice --port 8100
 
-Two sets of paths. What a selling system uses, as it would use the network:
+Two sets of paths. What the other party's system uses, as it would use the
+network:
 
-    POST /invoices                      a UBL Invoice or CreditNote, taken in or not
+    POST /invoices                      to the buyer: a UBL Invoice or CreditNote
+    POST /responses                     to the supplier: a Peppol Invoice Response
 
-And what a test uses to look at the mock and to drive it, under `/_mock`:
+And what a test uses to look at the mock and to drive it, under `/_mock`.
+The buyer:
 
     GET   /_mock/invoices               what is held
     GET   /_mock/invoices/<id>          one, with its findings and its responses
     GET   /_mock/invoices/<id>/document     as it was sent
     POST  /_mock/invoices/<id>/responses    the buyer says something of it
-    GET   /_mock/responses/<id>         an Invoice Response, as XML
+    GET   /_mock/responses/<id>         an Invoice Response it gave, as XML
+    GET   /_mock/buyer, PATCH /_mock/buyer      how the buyer behaves
+
+The supplier:
+
+    POST  /_mock/sent                   send this document to the buyer
+    GET   /_mock/sent                   what was sent
+    GET   /_mock/sent/<id>              one, with its delivery and what came back
+    GET   /_mock/sent/<id>/document     as it was sent
+    GET   /_mock/answers/<id>           an Invoice Response it was given, as XML
+
+And both:
+
     GET   /_mock/turned-away            what was not taken in, and why
     POST  /_mock/validate               a document held to its rules, and not kept
-    GET   /_mock/buyer, PATCH /_mock/buyer      how the buyer behaves
     POST  /_mock/reset                  forget everything
 
 None of this is Peppol's transport. A real invoice travels by AS4 between
 access points that find each other by SMP lookup; here it is a `POST`, and
-the seller a response goes to is a URL (`--seller-url`). The paths and the
+the other party is a URL (`--buyer-url`, `--seller-url`). The paths and the
 status codes are this mock's own: nothing published defines them.
 """
 from __future__ import annotations
@@ -31,6 +46,7 @@ import json
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, List, Optional, Sequence, Tuple
@@ -41,6 +57,7 @@ from . import specification as _specification
 from .buyer import ANSWERS, Buyer, Held, NotSaid, Sent, TurnedAway, not_run
 from .model import Finding, Refused
 from .rules import Report, check, check_response
+from .supplier import Got, Issued, NotSent, Supplier
 from .ubl import parse_tree, tree
 
 PORT = 8100
@@ -89,6 +106,29 @@ def held(invoice: Held, full: bool = True) -> dict:
     return said
 
 
+def got(heard: Got) -> dict:
+    return {"id": heard.id, "sent": heard.invoice, "code": heard.code,
+            "partial": heard.partial, "ignored": heard.ignored, "received": heard.received,
+            "document": "/_mock/answers/%s" % heard.id}
+
+
+def issued(one: Issued, full: bool = True) -> dict:
+    document = one.document
+    said = {
+        "id": one.id, "kind": document.kind, "number": one.number,
+        "issued": document.text("BT-2"), "type": document.text("BT-3"),
+        "specification": one.report.specification,
+        "seller": document.text("BT-27"), "buyer": document.text("BT-44"),
+        "sent": one.sent, "verdict": one.report.verdict, "forced": one.forced,
+        "delivery": one.delivery, "status": one.status,
+    }
+    if full:
+        said["findings"] = [finding(found) for found in one.report.findings]
+        said["responses"] = [got(heard) for heard in one.responses]
+        said["document"] = "/_mock/sent/%s/document" % one.id
+    return said
+
+
 def validated(raw: bytes) -> dict:
     """Hold a document to its rules: an invoice or credit note to those of
     its specification, an Invoice Response to its own."""
@@ -102,7 +142,8 @@ def validated(raw: bytes) -> dict:
 
 
 def poster(url: str, timeout: float = 10.0) -> Callable[[bytes], dict]:
-    """What sends a response to the seller: a `POST` of the XML to one URL."""
+    """What sends a document to the other party: a `POST` of the XML to one
+    URL."""
     def deliver(xml: bytes) -> dict:
         request = urllib.request.Request(url, data=xml, method="POST",
                                          headers={"Content-Type": XML})
@@ -127,15 +168,21 @@ ROUTES: List[Tuple[str, "re.Pattern[str]", str]] = [
     (method, re.compile("^%s$" % pattern), name) for method, pattern, name in (
         ("GET", "/", "index"),
         ("POST", "/invoices", "receive"),
+        ("POST", "/responses", "hear"),
         ("GET", "/_mock/invoices", "invoices"),
         ("GET", r"/_mock/invoices/(\d+)", "invoice"),
         ("GET", r"/_mock/invoices/(\d+)/document", "invoice_document"),
         ("POST", r"/_mock/invoices/(\d+)/responses", "answer"),
         ("GET", r"/_mock/responses/(\d+)", "response_document"),
-        ("GET", "/_mock/turned-away", "turned_away"),
-        ("POST", "/_mock/validate", "validate"),
         ("GET", "/_mock/buyer", "behaviour"),
         ("PATCH", "/_mock/buyer", "behave"),
+        ("POST", "/_mock/sent", "send_out"),
+        ("GET", "/_mock/sent", "all_sent"),
+        ("GET", r"/_mock/sent/(\d+)", "one_sent"),
+        ("GET", r"/_mock/sent/(\d+)/document", "sent_document"),
+        ("GET", r"/_mock/answers/(\d+)", "answer_document"),
+        ("GET", "/_mock/turned-away", "turned_away"),
+        ("POST", "/_mock/validate", "validate"),
         ("POST", "/_mock/reset", "reset"),
     )]
 
@@ -143,7 +190,8 @@ ROUTES: List[Tuple[str, "re.Pattern[str]", str]] = [
 class Handler(BaseHTTPRequestHandler):
     server_version = "mock-einvoice/%s" % __version__
     protocol_version = "HTTP/1.1"
-    buyer: Buyer                    # set on the class `serve` makes
+    buyer: Buyer                    # both set on the class `serve` makes
+    supplier: Supplier
     quiet = False
 
     # -- plumbing -----------------------------------------------------------------------
@@ -153,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
             super().log_message(format, *args)
 
     def dispatch(self) -> None:
-        path = self.path.partition("?")[0]
+        path, _, self.query = self.path.partition("?")
         allowed = []
         try:
             for method, pattern, name in ROUTES:
@@ -229,11 +277,20 @@ class Handler(BaseHTTPRequestHandler):
             raise Problem(422 if away.report else 400, away.code, away.reason, **more)
         self.json(201, held(invoice), Location="/_mock/invoices/%s" % invoice.id)
 
+    def hear(self) -> None:
+        try:
+            heard = self.supplier.hear(self.body())
+        except TurnedAway as away:
+            more = reported(away.report) if away.report else {}
+            raise Problem(400 if away.code.startswith("NOT-") else 422, away.code,
+                          away.reason, **more)
+        self.json(201, got(heard), Location="/_mock/answers/%s" % heard.id)
+
     # -- the mock's side ----------------------------------------------------------------
 
     def index(self) -> None:
         self.json(200, {
-            "mock": "mock-einvoice", "version": __version__, "side": "buyer",
+            "mock": "mock-einvoice", "version": __version__, "sides": ["buyer", "supplier"],
             "answers": self.buyer.answers,
             "paths": ["%s %s" % (method, pattern.pattern.strip("^$").replace(r"(\d+)", "<id>"))
                       for method, pattern, _name in ROUTES]})
@@ -277,10 +334,47 @@ class Handler(BaseHTTPRequestHandler):
             raise Problem(NOT_SAID.get(no.code, 409), no.code, no.reason, **more)
         self.json(201, sent(said), Location="/_mock/responses/%s" % said.id)
 
+    def send_out(self) -> None:
+        force = urllib.parse.parse_qs(self.query, keep_blank_values=True)
+        if set(force) - {"force"} or force.get("force", ["true"]) not in (["true"], ["false"]):
+            raise Problem(400, "REQUEST", "the one thing to ask for is ?force=true")
+        try:
+            one = self.supplier.send(self.body(), force.get("force") == ["true"])
+        except NotSent as no:
+            more = reported(no.report) if no.report else {}
+            raise Problem(422 if no.report else 400, no.code, no.reason, **more)
+        self.json(201, issued(one), Location="/_mock/sent/%s" % one.id)
+
+    def all_sent(self) -> None:
+        with self.supplier.lock:
+            self.json(200, [issued(one, full=False) for one in self.supplier.sent.values()])
+
+    def one_issued(self, identifier: str) -> Issued:
+        one = self.supplier.sent.get(identifier)
+        if one is None:
+            raise Problem(404, "NO-SUCH-DOCUMENT", "no document %s was sent" % identifier)
+        return one
+
+    def one_sent(self, identifier: str) -> None:
+        with self.supplier.lock:
+            self.json(200, issued(self.one_issued(identifier)))
+
+    def sent_document(self, identifier: str) -> None:
+        self.send(200, XML, self.one_issued(identifier).xml)
+
+    def answer_document(self, identifier: str) -> None:
+        heard = self.supplier.answers.get(identifier)
+        if heard is None:
+            raise Problem(404, "NO-SUCH-RESPONSE", "no response %s was received" % identifier)
+        self.send(200, XML, heard.xml)
+
     def turned_away(self) -> None:
-        with self.buyer.lock:
-            self.json(200, [{"received": when, "error": code, "reason": reason}
-                            for when, code, reason in self.buyer.turned_away])
+        with self.buyer.lock, self.supplier.lock:
+            both = [(when, side, code, reason)
+                    for side, party in (("buyer", self.buyer), ("supplier", self.supplier))
+                    for when, code, reason in party.turned_away]
+        self.json(200, [{"received": when, "side": side, "error": code, "reason": reason}
+                        for when, side, code, reason in sorted(both, key=lambda one: one[0])])
 
     def validate(self) -> None:
         try:
@@ -303,6 +397,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("Content-Length"):
             self.body()
         self.buyer.reset()
+        self.supplier.reset()
         self.json(200, {"reset": True})
 
 
@@ -319,12 +414,13 @@ def clarification(one: object) -> bool:
                     and all(isinstance(part, str) for part in pair) for pair in conditions))
 
 
-def serve(buyer: Buyer, host: str = "127.0.0.1", port: int = PORT,
-          quiet: bool = False) -> ThreadingHTTPServer:
-    """A server for one buyer, bound and not yet serving: call
-    `serve_forever()` on it. Port 0 is a port the operating system chooses,
-    which `server_address` then names."""
-    handler = type("Handler", (Handler,), {"buyer": buyer, "quiet": quiet})
+def serve(buyer: Buyer, host: str = "127.0.0.1", port: int = PORT, quiet: bool = False,
+          supplier: Optional[Supplier] = None) -> ThreadingHTTPServer:
+    """A server for one buyer and one supplier, bound and not yet serving:
+    call `serve_forever()` on it. Port 0 is a port the operating system
+    chooses, which `server_address` then names."""
+    handler = type("Handler", (Handler,), {"buyer": buyer, "quiet": quiet,
+                                           "supplier": supplier or Supplier(now=buyer.now)})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     return server
@@ -333,14 +429,18 @@ def serve(buyer: Buyer, host: str = "127.0.0.1", port: int = PORT,
 def arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="mock-einvoice",
-        description="A mock buyer: takes UBL invoices and credit notes in over HTTP, holds "
-                    "them to EN 16931, Peppol BIS Billing 3.0 and XRechnung 3.0, and "
-                    "answers the Peppol ones with Invoice Responses.")
+        description="A mock buyer and supplier. As a buyer it takes UBL invoices and credit "
+                    "notes in over HTTP, holds them to EN 16931, Peppol BIS Billing 3.0 "
+                    "and XRechnung 3.0, and answers the Peppol ones with Invoice "
+                    "Responses. As a supplier it sends them and takes the responses.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=PORT, help="default %d" % PORT)
     parser.add_argument("--seller-url", metavar="URL",
-                        help="where each Invoice Response is POSTed; without it they are "
-                             "kept and read at /_mock/responses/<id>")
+                        help="as a buyer: where each Invoice Response is POSTed; without "
+                             "it they are kept and read at /_mock/responses/<id>")
+    parser.add_argument("--buyer-url", metavar="URL",
+                        help="as a supplier: where each document is POSTed; without it "
+                             "they are recorded and go nowhere")
     parser.add_argument("--answers", choices=ANSWERS, default="required",
                         help="when a document is acknowledged (AB) on receipt: where its "
                              "profile requires a response (the default), always, or never")
@@ -355,11 +455,12 @@ def arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     asked = arguments(argv)
-    buyer = Buyer(answers=asked.answers,
-                  deliver=poster(asked.seller_url) if asked.seller_url else None,
-                  now=(lambda: asked.clock) if asked.clock else None)
-    server = serve(buyer, asked.host, asked.port, asked.quiet)
-    print("mock-einvoice %s: a buyer on http://%s:%d"
+    now = (lambda: asked.clock) if asked.clock else None
+    buyer = Buyer(answers=asked.answers, now=now,
+                  deliver=poster(asked.seller_url) if asked.seller_url else None)
+    supplier = Supplier(now=now, deliver=poster(asked.buyer_url) if asked.buyer_url else None)
+    server = serve(buyer, asked.host, asked.port, asked.quiet, supplier)
+    print("mock-einvoice %s: a buyer and a supplier on http://%s:%d"
           % ((__version__,) + server.server_address[:2]), file=sys.stderr, flush=True)
     try:
         server.serve_forever()
