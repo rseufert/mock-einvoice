@@ -122,8 +122,8 @@ class EachRuleFails(unittest.TestCase):
                      '</cbc:ID><cac:Attachment><cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain"'
                      ' filename="t.txt">eA==</cbc:EmbeddedDocumentBinaryObject></cac:Attachment>'
                      "</cac:AdditionalDocumentReference><cac:AccountingSupplierParty>"),
-        "BR-CL-25": ('<cbc:EndpointID schemeID="0088">4098765000004',
-                     '<cbc:EndpointID schemeID="GLN">4098765000004'),
+        "BR-CL-25": ('<cbc:EndpointID schemeID="0088">4098765000003',
+                     '<cbc:EndpointID schemeID="GLN">4098765000003'),
         "BR-CL-26": ("</cbc:ActualDeliveryDate>", "</cbc:ActualDeliveryDate><cac:DeliveryLocation>"
                      '<cbc:ID schemeID="GLN">4098765000011</cbc:ID></cac:DeliveryLocation>'),
     }
@@ -246,8 +246,8 @@ class WhatTheTestsSayExactly(unittest.TestCase):
                         "Factor AG</cbc:Name></cac:PartyName></cac:PayeeParty><cac:Delivery>"
                         % (identifier % "SEPA").replace("DE98ZZZ0", "DE98ZZZ1"))
         self.assertEqual(codes(payee), [])
-        buyer = changed(INVOICE, '4098765000004</cbc:EndpointID>',
-                        "4098765000004</cbc:EndpointID>" + identifier % "SEPA")
+        buyer = changed(INVOICE, '4098765000003</cbc:EndpointID>',
+                        "4098765000003</cbc:EndpointID>" + identifier % "SEPA")
         self.assertEqual(codes(buyer), [("BR-CL-10", "BT-46")])
         # In small letters it is the creditor identifier to the reader and no
         # scheme to the rule.

@@ -56,11 +56,20 @@ class TheEngine(unittest.TestCase):
         self.assertEqual(over, {"model": 44 + 58 + 98 + 23, "tree": 756})
         self.assertTrue(all((r.over == "tree") == i.startswith("UBL-")
                             for i, r in REGISTRY["en16931"].items()))
-        self.assertEqual((REGISTRY["peppol"], REGISTRY["xrechnung"]), ({}, {}))
+        # Of Peppol's, its own 63 are built and its national rules are not.
+        self.assertEqual(sorted(REGISTRY["peppol"]),
+                         sorted(i for i in published.PEPPOL if i.startswith("PEPPOL-")))
+        self.assertEqual(len(REGISTRY["peppol"]), 63)
+        self.assertTrue(all(r.over == "tree" for r in REGISTRY["peppol"].values()))
+        self.assertEqual(REGISTRY["xrechnung"], {})
 
     def test_the_published_lists_are_the_sizes_the_sources_have(self):
         self.assertEqual({layer: len(found) for layer, found in published.LAYERS.items()},
-                         {"en16931": 979, "peppol": 166, "xrechnung": 55})
+                         {"en16931": 979, "peppol": 165, "xrechnung": 56})
+        # A rule that is commented out in its source is not published, and
+        # one whose test has a `>` in it is.
+        self.assertNotIn("PEPPOL-COMMON-R048", published.PEPPOL)
+        self.assertEqual(published.XRECHNUNG["BR-DEX-02"], "warning")
         self.assertEqual(published.EN16931["BR-CO-10"], "fatal")
         self.assertEqual(published.EN16931["UBL-CR-001"], "warning")
         for layer, (name, link) in published.SOURCES.items():
@@ -100,20 +109,24 @@ class TheReport(unittest.TestCase):
         self.assertEqual(document.text("BT-1"), "GLX-4711")
         self.assertEqual((report.specification, report.findings, report.verdict),
                          ("peppol", [], "not judged"))
-        # Every rule of the core ran, and none of Peppol's is built.
-        self.assertEqual(len(report.ran), 979)
+        # Every rule of the core ran, and Peppol's own. Its seller is in
+        # Germany, so Germany's rules could apply to it, and they are not
+        # built: that is what it waits on. The other countries' cannot.
+        self.assertEqual(len(report.ran), 979 + 63)
         self.assertEqual(sorted(report.not_built), ["en16931", "peppol"])
         self.assertEqual(report.not_built["en16931"], {})
-        self.assertEqual(len(report.not_built["peppol"]), 166)
-        self.assertEqual(report.not_built["peppol"]["PEPPOL-EN16931-R001"], "fatal")
-        self.assertEqual(report.unasked, sum(1 for flag in published.PEPPOL.values()
-                                             if flag == "fatal"))
-        self.assertEqual(report.unasked, 139)
+        self.assertEqual(len(report.not_built["peppol"]), 31)
+        self.assertTrue(all(i.startswith("DE-R-") for i in report.not_built["peppol"]))
+        self.assertEqual(report.unasked, 24)
+        self.assertEqual(len(report.not_applicable["peppol"]), 71)
+        self.assertEqual(report.not_applicable["en16931"], {})
+        self.assertFalse(any(i.startswith("DE-R-") for i in report.not_applicable["peppol"]))
 
     def test_an_xrechnung_document_is_owed_xrechnungs_rules_and_not_peppols(self):
         _document, report = validate(sample("xrechnung-invoice.xml"))
         self.assertEqual(sorted(report.not_built), ["en16931", "xrechnung"])
-        self.assertEqual(len(report.not_built["xrechnung"]), 55)
+        self.assertEqual(len(report.not_built["xrechnung"]), 56)
+        self.assertEqual(report.not_applicable, {"en16931": {}, "xrechnung": {}})
         self.assertEqual(report.verdict, "not judged")
 
     def test_one_failing_rule_is_invalid(self):

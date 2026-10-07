@@ -158,9 +158,11 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertEqual(disagreements, [])
         self.assertEqual(dict(counts), {
             "files": 90, "cases": 400, "expectations": 396,
-            "not built": 396,       # none of Peppol's rules is built yet
+            "agree": 331,           # every case for Peppol's own rules
+            "not built": 65,        # Germany's rules, which are not built yet
             "not ours": 4})         # documents that are not an invoice or credit note
-        self.assertEqual(len(not_built), 91)
+        self.assertEqual(len(not_built), 31)
+        self.assertTrue(all(identifier.startswith("DE-R-") for identifier in not_built))
 
     def test_the_list_of_peppols_files_is_the_examples_and_two_sets_of_unit_tests(self):
         import importlib.util
@@ -170,19 +172,24 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         tool = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(tool)
         listed = list(tool.listed())
-        self.assertEqual(len(listed), 100)
+        # The examples, two sets of unit tests, and the rule file itself,
+        # which a test reads Peppol's code lists from.
+        self.assertEqual(len(listed), 101)
         folders = sorted({path.rsplit("/", 1)[0] for _blob, _size, path in listed})
-        self.assertEqual(folders, ["rules/examples", "rules/unit-UBL-DE", "rules/unit-UBL-PEPPOL"])
+        self.assertEqual(folders, ["rules/examples", "rules/sch", "rules/unit-UBL-DE",
+                                   "rules/unit-UBL-PEPPOL"])
         for blob, size, path in listed:
             self.assertRegex(blob, "^[0-9a-f]{40}$")
             self.assertGreater(size, 0)
-            self.assertTrue(path.endswith(".xml"))
+            self.assertTrue(path.endswith(".xml") or path == "rules/sch/PEPPOL-EN16931-UBL.sch")
         # The hash is git's for a blob, so a file can be checked against the list.
         self.assertEqual(tool.blob_hash(b"hello\n"), "ce013625030ba8dba906f756967f9e9ca394464a")
         self.assertIn(tool.COMMIT, published.SOURCES["peppol"][1])
 
 
 class DocumentsThisProjectDidNotWrite(unittest.TestCase):
+    verdicts = {}
+
     def taken(self, name, data, specification):
         """Read with nothing to say, written back whole, and no rule failing."""
         document, said, findings = read(data)
@@ -192,10 +199,11 @@ class DocumentsThisProjectDidNotWrite(unittest.TestCase):
         before, after = leaves(data), leaves(written)
         self.assertEqual(before - after, type(before)(), name)
         self.assertEqual(after - before, type(before)(), name)
-        # Not a failure and not a warning, of any rule of the core.
+        # Not a failure and not a warning, of any rule that is built.
         _document, report = validate(data)
-        self.assertEqual((report.findings, report.verdict), ([], "not judged"), name)
-        self.assertEqual(len(report.ran), 979)
+        self.assertEqual(report.findings, [], name)
+        self.assertGreaterEqual(len(report.ran), 979)
+        self.verdicts[name] = report.verdict
         return sum(before.values())
 
     def test_no_rule_of_the_core_has_anything_to_say_of_the_en16931_examples(self):
@@ -217,6 +225,9 @@ class DocumentsThisProjectDidNotWrite(unittest.TestCase):
                 count += 1
         self.assertEqual(count, 39)
         self.assertGreater(elements, 4000)
+        # None of XRechnung's own rules is built, so none is judged.
+        self.assertEqual({self.verdicts[name] for name, _data in documents(
+            os.path.join(XRECHNUNG, "business-cases", "standard"))}, {"not judged"})
 
     def test_its_extension_and_cvd_documents_are_refused_by_name(self):
         for folder, code, count in (("business-cases/extension", "XRECHNUNG-EXTENSION", 5),
@@ -239,6 +250,16 @@ class DocumentsThisProjectDidNotWrite(unittest.TestCase):
                 self.taken(name, data, "peppol")
             count += 1
         self.assertEqual(count, 10)
+        # Nine are valid: every fatal rule that could apply to them ran and
+        # found nothing. The tenth is from a seller in Sweden, whose rules
+        # are not built, so it is not judged.
+        names = [name for name, _data in documents(os.path.join(PEPPOL, "examples"))]
+        waiting = [name for name in names if self.verdicts[name] != "valid"]
+        self.assertEqual(waiting, ["vat-category-O.xml"])
+        self.assertEqual(self.verdicts["vat-category-O.xml"], "not judged")
+        _document, report = validate(dict(documents(os.path.join(PEPPOL, "examples")))[
+            "vat-category-O.xml"])
+        self.assertTrue(all(i.startswith("SE-R-") for i in report.not_built["peppol"]))
 
 
 if __name__ == "__main__":

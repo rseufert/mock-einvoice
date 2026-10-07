@@ -167,8 +167,8 @@ class EachRuleFails(unittest.TestCase):
         "BR-61": (without("<cac:PayeeFinancialAccount>", "</cac:PayeeFinancialAccount>"), ()),
         "BR-62": (swap('<cbc:EndpointID schemeID="0088">4012345000009',
                        "<cbc:EndpointID>4012345000009"), ()),
-        "BR-63": (swap('<cbc:EndpointID schemeID="0088">4098765000004',
-                       "<cbc:EndpointID>4098765000004"), ()),
+        "BR-63": (swap('<cbc:EndpointID schemeID="0088">4098765000003',
+                       "<cbc:EndpointID>4098765000003"), ()),
         "BR-64": (swap("</cac:SellersItemIdentification>", "</cac:SellersItemIdentification>"
                        "<cac:StandardItemIdentification><cbc:ID>4012345000016</cbc:ID>"
                        "</cac:StandardItemIdentification>"), ()),

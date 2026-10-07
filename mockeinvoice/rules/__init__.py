@@ -14,11 +14,15 @@ of every layer at the versions this package is pinned to.
 
 What is not built is said
 -------------------------
-Most rules are not built yet. A `Report` lists the rules that ran and, layer
+Some rules are not built yet. A `Report` lists the rules that ran and, layer
 by layer, the published rules that did not, and its verdict follows from
 both: a document with no failing rule is `valid` only when every fatal rule
-of its layers ran. Until then the most it can be is `not judged`. Passing a
+of its layers that could apply to it ran. Until then the most it can be is `not judged`. Passing a
 document on rules that were not run is the one thing this must never do.
+
+A rule that could not apply is not waited on: the rules Peppol has for a
+seller in one country say nothing of a document from another, and are listed
+apart as not applicable (`SCOPES`).
 
 Two things a rule can be asked of
 ---------------------------------
@@ -101,9 +105,12 @@ class Report:
     specification: str
     findings: List[Finding] = field(default_factory=list)
     ran: List[str] = field(default_factory=list)
-    # The published rules of the document's layers that are not built, by
-    # layer, each with its flag.
+    # The published rules of the document's layers that are not built and
+    # could apply to it, by layer, each with its flag.
     not_built: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    # And those that are not built and cannot apply to it: the rules for a
+    # seller's country, of a document from another. They are not waited on.
+    not_applicable: Dict[str, Dict[str, str]] = field(default_factory=dict)
 
     @property
     def failures(self) -> List[Finding]:
@@ -139,15 +146,38 @@ def check(document: Document, specification: str,
     if specification not in LAYERS_OF:
         raise ValueError("a specification is one of %s, not %r"
                          % (", ".join(sorted(LAYERS_OF)), specification))
+    from .. import ubl
+    from . import tree
+    if sent is None:
+        sent = ubl.tree(ubl.write(document))
+    root = tree.top(sent)
     report = Report(specification)
     for layer in LAYERS_OF[specification]:
         report.findings.extend(run(document, layer, sent))
         report.ran.extend(REGISTRY[layer])
-        report.not_built[layer] = {identifier: flag
-                                   for identifier, flag in published.LAYERS[layer].items()
-                                   if identifier not in REGISTRY[layer]}
+        report.not_built[layer], report.not_applicable[layer] = {}, {}
+        for identifier, flag in published.LAYERS[layer].items():
+            if identifier not in REGISTRY[layer]:
+                could = could_apply(layer, identifier, root)
+                (report.not_built if could else report.not_applicable)[layer][identifier] = flag
     report.findings[:0] = unsaid(reading, report.findings)
     return report
+
+
+# By layer, the rule sets that are for some documents only: the start of
+# their rules' names, and whether a document is one of theirs. Filled by the
+# layer's module. A set is listed only where every one of its published rules
+# asks the same question of the document before anything else.
+SCOPES: Dict[str, Dict[str, Callable[[Any], bool]]] = {layer: {} for layer in published.LAYERS}
+
+
+def could_apply(layer: str, identifier: str, root: Any) -> bool:
+    """Whether an unbuilt rule could have anything to say of this document.
+    Every rule could, but one of a set the document is outside of."""
+    for prefix, within in SCOPES[layer].items():
+        if identifier.startswith(prefix):
+            return within(root)
+    return True
 
 
 def unsaid(reading: Sequence[Finding], found: Sequence[Finding]) -> List[Finding]:
@@ -157,7 +187,8 @@ def unsaid(reading: Sequence[Finding], found: Sequence[Finding]) -> List[Finding
     the standard has one. Where a published rule reports that element, or
     something in it, under its own name, the reader's finding is dropped.
     """
-    places = [finding.path for finding in found if finding.code.startswith("UBL-")]
+    # A rule asked of the document's elements says where as a path from its root.
+    places = [finding.path for finding in found if finding.path.startswith("/")]
     return [finding for finding in reading
             if finding.code not in ("UNHELD", "REPEATED")
             or not any(place == finding.path or place.startswith(finding.path + "/")
@@ -192,3 +223,6 @@ from . import en16931 as _en16931  # noqa: E402,F401  (registers its rules)
 from . import en16931_codes as _en16931_codes  # noqa: E402,F401
 from . import en16931_ubl as _en16931_ubl  # noqa: E402,F401
 from . import en16931_vat as _en16931_vat  # noqa: E402,F401
+from . import peppol as _peppol  # noqa: E402,F401
+
+SCOPES["peppol"].update(_peppol.SCOPES)

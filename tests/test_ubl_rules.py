@@ -526,7 +526,7 @@ class WhatTheReaderSaidAndWhatARuleSays(unittest.TestCase):
                    Finding("warning", "TEXT", "/Invoice/cbc:UUID", "x")]
         found = [Finding("warning", "UBL-CR-005", "/Invoice/cbc:IDx", "x"),
                  Finding("warning", "UBL-CR-005", "/Invoice/cbc:UUID", "x"),
-                 Finding("fatal", "BR-02", "/Invoice/cbc:ID", "x")]
+                 Finding("fatal", "BR-02", "BT-1", "x")]
         self.assertEqual(unsaid(reading, found), reading)
         found.append(Finding("warning", "UBL-DT-08", "/Invoice/cbc:ID/@schemeName", "x"))
         self.assertEqual(unsaid(reading, found), reading[1:])
