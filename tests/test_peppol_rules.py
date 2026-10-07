@@ -30,9 +30,11 @@ USD_TOTAL = '<cac:TaxTotal><cbc:TaxAmount currencyID="USD">%s</cbc:TaxAmount></c
 
 
 def found(text: str) -> list:
-    """Peppol's rules that a document fails as sent, with where."""
+    """Peppol's own rules that a document fails as sent, with where. Not
+    Germany's, which are in `test_peppol_de_rules.py`."""
     document, _findings, sent = parse_tree(text)
-    return [(f.code, f.path) for f in run(document, "peppol", sent)]
+    return [(f.code, f.path) for f in run(document, "peppol", sent)
+            if f.code.startswith("PEPPOL-")]
 
 
 def failing(text: str) -> list:
@@ -50,7 +52,7 @@ def french(text: str) -> str:
 class WhatIsBuilt(unittest.TestCase):
     def test_peppols_own_63_rules_and_none_of_a_countrys(self):
         self.assertEqual(len(OWN), 63)
-        self.assertEqual(sorted(REGISTRY["peppol"]), OWN)
+        self.assertEqual(sorted(i for i in REGISTRY["peppol"] if i.startswith("PEPPOL-")), OWN)
         flags = [published.PEPPOL[i] for i in OWN]
         self.assertEqual((flags.count("fatal"), flags.count("warning")), (54, 9))
 
@@ -62,7 +64,7 @@ class WhatIsBuilt(unittest.TestCase):
     def test_a_finding_is_where_in_the_document_and_links_to_peppols_rules(self):
         document, _findings, sent = parse_tree(changed(
             INVOICE, "<cbc:DueDate>2026-11-01", "<cbc:DueDate>1.11.2026"))
-        finding, = run(document, "peppol", sent)
+        finding, = [f for f in run(document, "peppol", sent)]
         self.assertEqual((finding.level, finding.code, finding.path),
                          ("fatal", "PEPPOL-EN16931-F001", "/Invoice/cbc:DueDate"))
         self.assertEqual(finding.text, "a date is ten characters, `YYYY-MM-DD`: it is '1.11.2026'")
@@ -439,21 +441,22 @@ class TheRulesForASellersCountry(unittest.TestCase):
         return top(tree(text))
 
     def test_they_are_not_built_and_each_set_has_its_country(self):
-        national = [i for i in published.PEPPOL if not i.startswith("PEPPOL-")]
-        self.assertEqual(len(national), 102)
+        national = [i for i in published.PEPPOL if not i.startswith(("PEPPOL-", "DE-R-"))]
+        self.assertEqual(len(national), 71)
         self.assertFalse(set(national) & set(REGISTRY["peppol"]))
         prefixes = {re.match(r"[A-Z]+-[A-Z]-", i).group(0) for i in national}
         self.assertEqual(prefixes, set(SCOPES["peppol"]))
         self.assertEqual(SCOPES["en16931"], {})
 
     def test_a_document_is_one_of_a_countrys_by_any_of_three_things(self):
-        german = self.root(INVOICE)
-        self.assertTrue(could_apply("peppol", "DE-R-001", german))
-        self.assertFalse(could_apply("peppol", "SE-R-001", german))
+        dutch = self.root(INVOICE.replace("<cbc:IdentificationCode>DE<",
+                                          "<cbc:IdentificationCode> nl <"))
+        self.assertTrue(could_apply("peppol", "NL-R-001", dutch))
+        self.assertFalse(could_apply("peppol", "SE-R-001", dutch))
+        self.assertFalse(could_apply("peppol", "NL-R-001", self.root(INVOICE)))
         # By the seller's VAT identifier, whatever its address.
         by_vat = self.root(INVOICE.replace(">DE123456789<", ">se556012579001<"))
         self.assertTrue(could_apply("peppol", "SE-R-001", by_vat))
-        self.assertTrue(could_apply("peppol", "DE-R-001", by_vat))       # the address still
         # By its tax representative's.
         by_representative = self.root(changed(
             INVOICE, "<cac:Delivery>", "<cac:TaxRepresentativeParty><cac:PartyTaxScheme>"
@@ -484,7 +487,7 @@ class TheRulesForASellersCountry(unittest.TestCase):
             if any(not i.startswith("PEPPOL-") for i in identifiers):
                 self.assertTrue(any(word in element.get("context") for word in asks), identifiers)
                 seen += len(identifiers)
-        self.assertEqual(seen, 102)
+        self.assertEqual(seen, 102)         # Germany's 31 among them, which are built
 
 
 class TheVerdict(unittest.TestCase):
@@ -492,13 +495,22 @@ class TheVerdict(unittest.TestCase):
         _document, report = validate(french(INVOICE))
         self.assertEqual((report.findings, report.verdict), ([], "valid"))
         self.assertEqual(report.not_built, {"en16931": {}, "peppol": {}})
-        self.assertEqual(len(report.not_applicable["peppol"]), 102)
-        self.assertEqual(len(report.ran), 979 + 63)
+        self.assertEqual(len(report.not_applicable["peppol"]), 71)
+        self.assertEqual(len(report.ran), 979 + 63 + 31)
 
-    def test_one_from_germany_waits_on_germanys_rules(self):
+    def test_one_from_germany_is_valid_too_now_that_germanys_rules_are_built(self):
         _document, report = validate(INVOICE)
-        self.assertEqual((report.findings, report.verdict), ([], "not judged"))
-        self.assertEqual(report.unasked, 24)
+        self.assertEqual((report.findings, report.verdict), ([], "valid"))
+        self.assertEqual(report.unasked, 0)
+
+    def test_one_from_a_country_whose_rules_are_not_built_waits_on_them(self):
+        swedish = french(INVOICE).replace("<cbc:IdentificationCode>FR<",
+                                          "<cbc:IdentificationCode>SE<")
+        _document, report = validate(swedish)
+        self.assertEqual((report.failures, report.verdict), ([], "not judged"))
+        self.assertEqual(len(report.not_built["peppol"]), 13)
+        self.assertTrue(all(i.startswith("SE-R-") for i in report.not_built["peppol"]))
+        self.assertEqual(report.unasked, 7)
 
     def test_and_a_failure_is_invalid_wherever_it_is_from(self):
         _document, report = validate(changed(french(INVOICE), "<cbc:DueDate>2026-11-01",

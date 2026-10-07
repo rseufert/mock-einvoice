@@ -56,10 +56,11 @@ class TheEngine(unittest.TestCase):
         self.assertEqual(over, {"model": 44 + 58 + 98 + 23, "tree": 756})
         self.assertTrue(all((r.over == "tree") == i.startswith("UBL-")
                             for i, r in REGISTRY["en16931"].items()))
-        # Of Peppol's, its own 63 are built and its national rules are not.
-        self.assertEqual(sorted(REGISTRY["peppol"]),
-                         sorted(i for i in published.PEPPOL if i.startswith("PEPPOL-")))
-        self.assertEqual(len(REGISTRY["peppol"]), 63)
+        # Of Peppol's, its own 63 and Germany's 31 are built, and the other
+        # countries' are not.
+        self.assertEqual(sorted(REGISTRY["peppol"]), sorted(
+            i for i in published.PEPPOL if i.startswith(("PEPPOL-", "DE-R-"))))
+        self.assertEqual(len(REGISTRY["peppol"]), 63 + 31)
         self.assertTrue(all(r.over == "tree" for r in REGISTRY["peppol"].values()))
         self.assertEqual(REGISTRY["xrechnung"], {})
 
@@ -104,23 +105,19 @@ class TheEngine(unittest.TestCase):
 
 
 class TheReport(unittest.TestCase):
-    def test_a_document_nothing_is_wrong_with_is_not_judged_while_rules_are_unbuilt(self):
+    def test_a_document_nothing_is_wrong_with_is_valid_when_every_rule_it_is_owed_ran(self):
         document, report = validate(INVOICE)
         self.assertEqual(document.text("BT-1"), "GLX-4711")
         self.assertEqual((report.specification, report.findings, report.verdict),
-                         ("peppol", [], "not judged"))
-        # Every rule of the core ran, and Peppol's own. Its seller is in
-        # Germany, so Germany's rules could apply to it, and they are not
-        # built: that is what it waits on. The other countries' cannot.
-        self.assertEqual(len(report.ran), 979 + 63)
-        self.assertEqual(sorted(report.not_built), ["en16931", "peppol"])
-        self.assertEqual(report.not_built["en16931"], {})
-        self.assertEqual(len(report.not_built["peppol"]), 31)
-        self.assertTrue(all(i.startswith("DE-R-") for i in report.not_built["peppol"]))
-        self.assertEqual(report.unasked, 24)
+                         ("peppol", [], "valid"))
+        # Every rule of the core ran, Peppol's own, and Germany's, where its
+        # seller and buyer are. The other countries' rules are not built and
+        # could not apply to it, so it does not wait on them.
+        self.assertEqual(len(report.ran), 979 + 63 + 31)
+        self.assertEqual(report.not_built, {"en16931": {}, "peppol": {}})
+        self.assertEqual(report.unasked, 0)
         self.assertEqual(len(report.not_applicable["peppol"]), 71)
         self.assertEqual(report.not_applicable["en16931"], {})
-        self.assertFalse(any(i.startswith("DE-R-") for i in report.not_applicable["peppol"]))
 
     def test_an_xrechnung_document_is_owed_xrechnungs_rules_and_not_peppols(self):
         _document, report = validate(sample("xrechnung-invoice.xml"))
@@ -150,7 +147,7 @@ class TheReport(unittest.TestCase):
         _document, report = validate(changed(
             INVOICE, "<cbc:IssueDate>", "<cbc:UBLVersionID>2.1</cbc:UBLVersionID><cbc:IssueDate>"))
         self.assertEqual(([f.code for f in report.findings], report.verdict),
-                         (["UNHELD"], "not judged"))
+                         (["UNHELD"], "valid"))
 
     def test_valid_is_only_said_when_no_fatal_rule_is_left_unasked(self):
         self.assertEqual(Report("peppol").verdict, "valid")

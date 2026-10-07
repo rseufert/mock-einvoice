@@ -9,10 +9,16 @@ says so where it does.
 ## [Unreleased]
 
 Nothing is released yet. What is here reads and writes invoices and holds them
-to every rule of the EN 16931 core and to Peppol's own rules.
+to every rule of the EN 16931 core, to Peppol's own rules and to its rules
+for Germany.
 
 ### Added
 
+- **Peppol's rules for Germany** ([#17]): `DE-R-001` to `DE-R-031` and
+  `DE-R-T02`, 31 rules, asked where seller and buyer are both in Germany.
+  All 65 of Peppol's unit test cases for them agree, which makes all 396 of
+  its cases. A Peppol document between German parties with nothing found
+  wrong is now `valid`, this project's own samples among them.
 - **Peppol BIS Billing 3.0's own rules** ([#16]): the 63 Peppol asks of every
   document, `PEPPOL-EN16931-*` and `PEPPOL-COMMON-*`, among them the
   checksums of identifiers by their scheme. All 331 of Peppol's unit test
@@ -139,3 +145,4 @@ to every rule of the EN 16931 core and to Peppol's own rules.
 [#10]: https://github.com/rseufert/mock-einvoice/issues/10
 [#11]: https://github.com/rseufert/mock-einvoice/issues/11
 [#16]: https://github.com/rseufert/mock-einvoice/issues/16
+[#17]: https://github.com/rseufert/mock-einvoice/issues/17

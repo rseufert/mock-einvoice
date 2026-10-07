@@ -1,9 +1,10 @@
 """Peppol BIS Billing 3.0: the rules Peppol adds to the EN 16931 core.
 
-Built so far: Peppol's own 63 rules, asked of every Peppol document
-(`PEPPOL-EN16931-*` and `PEPPOL-COMMON-*`). The rules for a seller's country
-(`DE-R`, `DK-R` and the rest) are not built; `SCOPES` says which documents
-they can apply to, so that a document from elsewhere does not wait on them.
+Here: Peppol's own 63 rules, asked of every Peppol document
+(`PEPPOL-EN16931-*` and `PEPPOL-COMMON-*`). Germany's are in `peppol_de.py`.
+The rules for a seller in another country (`DK-R`, `SE-R` and the rest) are
+not built; `SCOPES` says which documents they can apply to, so that a
+document from elsewhere does not wait on them.
 
 All of these are asked of the document's elements (`tree.py`), as the rules
 about UBL itself are: many of them are about what the model does not keep,
@@ -762,7 +763,7 @@ def from_(*countries: str) -> Callable[[At], bool]:
 # document is one they can apply to. Every one of their published contexts
 # asks for the seller's country in one of the three ways above.
 SCOPES: Dict[str, Callable[[At], bool]] = {
-    "DE-R-": from_("DE"), "DK-R-": from_("DK"), "GR-R-": from_("GR", "EL"),
+    "DK-R-": from_("DK"), "GR-R-": from_("GR", "EL"),
     "GR-S-": from_("GR", "EL"), "IS-R-": from_("IS"), "IT-R-": from_("IT"),
     "NL-R-": from_("NL"), "NO-R-": from_("NO"), "SE-R-": from_("SE"),
 }
