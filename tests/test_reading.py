@@ -2,7 +2,7 @@
 import unittest
 from decimal import Decimal
 
-from mockeinvoice import read
+from mockeinvoice import read, write
 from mockeinvoice.ubl import parse
 
 from . import sample
@@ -247,11 +247,37 @@ class WhatIsNotHeld(unittest.TestCase):
         _document, findings = parse(invoice("\n  <cbc:ID>1</cbc:ID>\n  "))
         self.assertEqual(findings, [])
 
-    def test_a_group_with_nothing_in_it_is_not_a_group_and_is_said(self):
-        document, findings = parse(invoice("<cac:InvoiceLine/><cac:PaymentMeans></cac:PaymentMeans>"))
-        self.assertEqual(codes(findings), [("warning", "EMPTY", "/Invoice/cac:InvoiceLine"),
-                                           ("warning", "EMPTY", "/Invoice/cac:PaymentMeans")])
-        self.assertEqual(document.all("BG-25"), [])
+    def test_a_group_with_nothing_in_it_is_still_there(self):
+        """That it is there is something a rule can ask, and the published
+        rules do: an empty VAT breakdown is a VAT breakdown to BR-CO-18."""
+        document, findings = parse(invoice(
+            "<cac:PaymentMeans></cac:PaymentMeans><cac:AllowanceCharge><cbc:ChargeIndicator>"
+            "false</cbc:ChargeIndicator></cac:AllowanceCharge><cac:TaxTotal><cac:TaxSubtotal/>"
+            "<cac:TaxSubtotal/></cac:TaxTotal><cac:InvoiceLine/>"))
+        self.assertEqual(findings, [])
+        self.assertEqual([len(document.all(g)) for g in ("BG-16", "BG-20", "BG-21", "BG-23",
+                                                         "BG-25")], [1, 1, 0, 2, 1])
+        self.assertTrue(document.all("BG-25")[0].empty())
+        self.assertEqual(parse(write(document))[0], document)
+
+    def test_a_group_that_occurs_once_is_there_by_its_terms_or_by_being_written_empty(self):
+        document, _findings = parse(invoice(
+            "<cac:InvoicePeriod/><cac:AccountingSupplierParty><cac:Party><cac:PostalAddress>"
+            "<cbc:CityName>Hamburg</cbc:CityName></cac:PostalAddress></cac:Party>"
+            "</cac:AccountingSupplierParty><cac:InvoiceLine><cac:InvoicePeriod>"
+            "<cbc:StartDate>2026-10-01</cbc:StartDate></cac:InvoicePeriod><cac:Price/>"
+            "</cac:InvoiceLine>"))
+        line, = document.all("BG-25")
+        self.assertEqual({g: document.has(g) for g in ("BG-4", "BG-5", "BG-6", "BG-7", "BG-14",
+                                                       "BG-22", "BG-25", "BG-23")},
+                         {"BG-4": True, "BG-5": True, "BG-6": False, "BG-7": False, "BG-14": True,
+                          "BG-22": False, "BG-25": True, "BG-23": False})
+        self.assertEqual({g: line.has(g) for g in ("BG-26", "BG-29", "BG-31", "BG-30")},
+                         {"BG-26": True, "BG-29": True, "BG-31": False, "BG-30": False})
+        # Only what held nothing is noted; the rest is there because its terms are.
+        self.assertEqual((document.present, line.present), ({"BG-14"}, {"BG-29"}))
+        self.assertEqual(parse(write(document))[0], document)
+        self.assertIn(b"<cac:InvoicePeriod></cac:InvoicePeriod>", write(document))
 
 
 class WhatTheBindingFixes(unittest.TestCase):

@@ -34,7 +34,7 @@ import datetime
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 # What XML Schema calls a decimal: digits with at most one point, and a sign.
 # No exponent, no infinity, no NaN, all of which `Decimal()` would take.
@@ -66,10 +66,12 @@ class Finding:
     found it (`BR-CO-15`). The reader's own findings have codes of its own, in
     capitals without a number, so the two cannot be mistaken for each other.
     """
-    level: str          # "error" or "warning"
+    level: str          # a published rule's flag ("fatal", "warning"), or the
+                        # reader's own "error" or "warning"
     code: str
-    path: str           # where in the document as it was sent
+    path: str           # where: in the document as sent, or in the model
     text: str
+    link: str = ""      # for a published rule, where its text is published
 
 
 @dataclass
@@ -133,6 +135,10 @@ class Group:
     id: str = ""
     terms: Dict[str, List[Value]] = field(default_factory=dict)
     groups: Dict[str, List["Group"]] = field(default_factory=dict)
+    # The groups that occur once, were there in the document, and held
+    # nothing: an invoicing period with no dates in it. A group with a term in
+    # it is there because the term is; `has` answers for both.
+    present: Set[str] = field(default_factory=set)
 
     def values(self, term: str) -> List[Value]:
         """Every value of a term here, in the order they were written."""
@@ -169,8 +175,24 @@ class Group:
         self.groups.setdefault(group, []).append(made)
         return made
 
+    def has(self, group: str) -> bool:
+        """Whether a group is here at all, with or without anything in it.
+
+        Some rules ask exactly this: "if there is an invoicing period, it has
+        a date". A group that occurs once is here if one of its terms is, or
+        if it was written with nothing in it that could be held.
+        """
+        if group in self.present or self.groups.get(group):
+            return True
+        if any(self.terms.get(term) for term in TERMS_IMPLYING.get(group, ())):
+            return True
+        # The creditor identifier is the seller's unless there is a payee.
+        return (group == "BG-4" and bool(self.terms.get("BT-90"))
+                and not any(self.terms.get(term) for term in TERMS_IMPLYING["BG-10"]))
+
     def empty(self) -> bool:
-        return not any(self.terms.values()) and not any(self.groups.values())
+        return (not any(self.terms.values()) and not any(self.groups.values())
+                and not self.present)
 
 
 @dataclass
@@ -385,3 +407,35 @@ TERMS = {
     "BT-164": ("Tax representative address line 3", "BG-12", "text"),
     "BT-165": ("Deliver to address line 3", "BG-15", "text"),
 }
+
+
+# A once-only group that is written inside another: the seller's address is
+# part of the seller, so where the one is, the other is.
+GROUP_INSIDE = {"BG-5": "BG-4", "BG-6": "BG-4", "BG-8": "BG-7", "BG-9": "BG-7",
+                "BG-12": "BG-11", "BG-15": "BG-13", "BG-30": "BG-31"}
+# Terms that are not written where their group is. The VAT totals are in the
+# document totals and written apart from them; the VAT point date code is the
+# document's and written in the invoicing period; the creditor identifier is
+# on whichever party has it (see `Group.has`).
+WRITTEN_ELSEWHERE = {"BT-110": (), "BT-111": (), "BT-8": ("BG-14",), "BT-90": ()}
+
+
+def implied(term: str) -> tuple:
+    """The once-only groups that are there because this term is."""
+    if term in WRITTEN_ELSEWHERE:
+        return WRITTEN_ELSEWHERE[term]
+    group = TERMS[term][1] if term in TERMS else ""
+    # BG-2, process control, is a group of the standard with no place of its
+    # own in a document: nothing is ever written "as" it.
+    if not group or GROUPS[group][1] or group == "BG-2":
+        return ()
+    found = [group]
+    while found[-1] in GROUP_INSIDE:
+        found.append(GROUP_INSIDE[found[-1]])
+    return tuple(found)
+
+
+TERMS_IMPLYING: Dict[str, List[str]] = {}
+for _term in TERMS:
+    for _group in implied(_term):
+        TERMS_IMPLYING.setdefault(_group, []).append(_term)

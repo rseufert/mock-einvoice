@@ -40,4 +40,4 @@ Changelog = "https://github.com/rseufert/mock-einvoice/blob/main/CHANGELOG.md"
 # carries the tests and the published examples they read, which are under
 # their own licences: see tests/samples/external.
 [tool.setuptools]
-packages = ["mockeinvoice"]
+packages = ["mockeinvoice", "mockeinvoice.rules"]

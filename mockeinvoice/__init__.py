@@ -1,8 +1,9 @@
 """mock-einvoice: EN 16931 invoices, read, held to their rules, and answered.
 
-So far: UBL 2.1 invoices and credit notes in and out.
+So far: UBL 2.1 invoices and credit notes in and out, and the first of the
+published rules.
 
-    from mockeinvoice import read, write
+    from mockeinvoice import read, validate, write
 
     document, specification, findings = read(xml)
     document.text("BT-1")                       # the invoice number
@@ -10,9 +11,16 @@ So far: UBL 2.1 invoices and credit notes in and out.
         line.term("BT-131").number              # a Decimal, never a float
     xml = write(document)
 
+    document, report = validate(xml)
+    report.verdict                              # "invalid" or "not judged"
+    for finding in report.failures:
+        finding.code, finding.path, finding.text    # "BR-CO-10", "BT-106", ...
+
 `read` refuses, with `Refused`, what is not built: anything that is not a UBL
 `Invoice` or `CreditNote`, and any specification other than Peppol BIS Billing
-3.0 and XRechnung 3.0. It does not yet hold a document to any rule.
+3.0 and XRechnung 3.0. `validate` holds a document to the rules that are
+built, and says which were not: until all of a specification's fatal rules
+are, no document's verdict is "valid".
 """
 from __future__ import annotations
 
@@ -20,11 +28,13 @@ from typing import List, Tuple, Union
 
 from . import specification as _specification
 from .model import Document, Finding, Group, Refused, Value
+from .rules import Report, check
 from .ubl import parse, write
 
 __version__ = "0.1.0.dev0"
 
-__all__ = ["Document", "Finding", "Group", "Refused", "Value", "read", "write", "__version__"]
+__all__ = ["Document", "Finding", "Group", "Refused", "Report", "Value", "check", "read",
+           "validate", "write", "__version__"]
 
 
 def read(data: Union[bytes, str]) -> Tuple[Document, str, List[Finding]]:
@@ -33,3 +43,11 @@ def read(data: Union[bytes, str]) -> Tuple[Document, str, List[Finding]]:
     say about it. Raises `Refused` for what is not taken."""
     document, findings = parse(data)
     return document, _specification.identify(document), findings
+
+
+def validate(data: Union[bytes, str]) -> Tuple[Document, Report]:
+    """Read a document and hold it to the rules of its specification that are
+    built. The report has what the reader said first, then what the rules
+    found, the rules that ran, and the published rules that did not."""
+    document, specification, findings = read(data)
+    return document, check(document, specification, findings)
