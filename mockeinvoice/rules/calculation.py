@@ -11,15 +11,26 @@ Nothing. In XPath a missing element is an empty sequence, and comparing
 anything with an empty sequence is false: a total that is not there is not
 equal to anything. So a rule about an amount that is absent fails, where
 code that skipped `None` would pass it.
+
+The same goes for what is not arithmetic. `normalize-space` knows four
+characters of white space and no more; a comparison of an element with a
+number reads the element as a double, and is an error if it is not one; a
+date may carry a time zone.
 """
 from __future__ import annotations
 
+import datetime
+import re
 from decimal import ROUND_FLOOR, Decimal
 from typing import Iterable, List, Optional
 
 from ..model import Group
 
 HALF = Decimal("0.5")
+SMALLEST_DOUBLE = Decimal("2.5e-324")     # below this a double rounds to zero
+XML_SPACE = re.compile(r"[ \t\r\n]+")
+DOUBLE = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|-?INF|NaN")
+XS_DATE = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})(Z|[+-][0-9]{2}:[0-9]{2})?")
 
 
 class Incomputable(Exception):
@@ -88,3 +99,71 @@ def numbered(groups: List[Group], name: str):
     """Each group with its place in the model: ("BG-25[2]", line)."""
     for number, group in enumerate(groups, start=1):
         yield "%s[%d]" % (name, number) if len(groups) > 1 else name, group
+
+
+def normalize_space(text: str) -> str:
+    """XPath's `normalize-space`: space, tab, carriage return and line feed
+    are white space, and a no-break space is a character like any other."""
+    return XML_SPACE.sub(" ", text).strip(" ")
+
+
+def said(group: Group, term: str) -> str:
+    """`normalize-space(cbc:X)` in a rule's test: "" if the term is not there.
+
+    If it is there twice the function is handed two things where it takes
+    one, which is an XPath error.
+    """
+    values = group.values(term)
+    if len(values) > 1:
+        raise Incomputable("%s occurs %d times where the rule takes one" % (term, len(values)))
+    return normalize_space(values[0].text) if values else ""
+
+
+def doubles(group: Group, term: str) -> List[Optional[Decimal]]:
+    """A term's values as `cbc:X >= 0` reads them: each as an `xs:double`.
+
+    That is wider than a decimal: `1e3` is one, and `INF`, and `NaN`, which
+    is not greater than, less than or equal to anything and is None here.
+    Text that is not a double is an XPath error. The numbers are held as
+    decimals, as everything here is, with the one thing a double does that
+    matters to a comparison with zero: what is too small for it is zero.
+    """
+    numbers: List[Optional[Decimal]] = []
+    for value in group.values(term):
+        text = normalize_space(value.text)
+        if not DOUBLE.fullmatch(text):
+            raise Incomputable("%s is %r, which is not a number" % (term, value.text))
+        if text == "NaN":
+            numbers.append(None)
+            continue
+        number = Decimal(text.replace("INF", "Infinity"))
+        numbers.append(Decimal(0) if abs(number) < SMALLEST_DOUBLE else number)
+    return numbers
+
+
+def xs_date(group: Group, term: str) -> Optional[int]:
+    """`xs:date(cbc:X)`, as something to compare: the minute its day starts.
+
+    None if the term is not there. A date may name a time zone, and one that
+    names none is taken as UTC here; XPath leaves that to the implementation.
+    Twice, or not a date, is an XPath error. So, here, is a year outside 0001
+    to 9999, which XPath can compute with and this cannot.
+    """
+    values = group.values(term)
+    if not values:
+        return None
+    if len(values) > 1:
+        raise Incomputable("%s occurs %d times where the rule takes one" % (term, len(values)))
+    match = XS_DATE.fullmatch(normalize_space(values[0].text))
+    try:
+        if not match:
+            raise ValueError
+        day = datetime.date(*(int(part) for part in match.groups()[:3]))
+        zone = match.group(4) or "Z"
+        hours, minutes = (0, 0) if zone == "Z" else (int(zone[1:3]), int(zone[4:6]))
+        if minutes > 59 or hours * 60 + minutes > 14 * 60:
+            raise ValueError
+    except ValueError:
+        raise Incomputable("%s is %r, which is not a date" % (term, values[0].text))
+    offset = hours * 60 + minutes
+    return day.toordinal() * 1440 - (-offset if zone[0] == "-" else offset)

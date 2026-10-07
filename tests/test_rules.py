@@ -1,4 +1,6 @@
-"""The rule engine, and the calculation and decimal rules of EN 16931."""
+"""The rule engine, and the calculation and decimal rules of EN 16931.
+
+The plain business rules, BR-01 to BR-65, are in `test_business_rules.py`."""
 import unittest
 from decimal import Decimal
 
@@ -46,10 +48,11 @@ class TheEngine(unittest.TestCase):
         for layer, built in REGISTRY.items():
             self.assertLessEqual(set(built), set(published.LAYERS[layer]), layer)
 
-    def test_the_calculation_and_decimal_rules_are_all_built_and_nothing_else_is_yet(self):
-        expected = {i for i in published.EN16931 if i.startswith(("BR-CO-", "BR-DEC-"))}
+    def test_three_families_of_the_core_are_built_and_nothing_else_is_yet(self):
+        expected = {i for i in published.EN16931
+                    if i.startswith(("BR-CO-", "BR-DEC-")) or i[3:].isdigit()}
         self.assertEqual(set(REGISTRY["en16931"]), expected)
-        self.assertEqual(len(expected), 44)
+        self.assertEqual(len(expected), 44 + 58)
         self.assertEqual((REGISTRY["peppol"], REGISTRY["xrechnung"]), ({}, {}))
 
     def test_the_published_lists_are_the_sizes_the_sources_have(self):
@@ -94,12 +97,12 @@ class TheReport(unittest.TestCase):
         self.assertEqual(document.text("BT-1"), "GLX-4711")
         self.assertEqual((report.specification, report.findings, report.verdict),
                          ("peppol", [], "not judged"))
-        self.assertEqual(len(report.ran), 44)
+        self.assertEqual(len(report.ran), 102)
         self.assertEqual(sorted(report.not_built), ["en16931", "peppol"])
-        self.assertEqual(len(report.not_built["en16931"]), 979 - 44)
+        self.assertEqual(len(report.not_built["en16931"]), 979 - 102)
         self.assertEqual(len(report.not_built["peppol"]), 166)
         self.assertNotIn("BR-CO-10", report.not_built["en16931"])
-        self.assertEqual(report.not_built["en16931"]["BR-01"], "fatal")
+        self.assertEqual(report.not_built["en16931"]["BR-S-01"], "fatal")
         fatal = sum(1 for flag in published.EN16931.values() if flag == "fatal") \
             + sum(1 for flag in published.PEPPOL.values() if flag == "fatal")
         built_fatal = sum(1 for i in REGISTRY["en16931"] if published.EN16931[i] == "fatal")
@@ -123,9 +126,10 @@ class TheReport(unittest.TestCase):
             "<cbc:ID>GLX-4711</cbc:ID><cbc:ID>again</cbc:ID><cbc:UBLVersionID>2.1"
             "</cbc:UBLVersionID>\n  <cbc:IssueDate>"))
         self.assertEqual([(f.level, f.code) for f in report.findings],
-                         [("error", "REPEATED"), ("warning", "UNHELD")])
+                         [("error", "REPEATED"), ("warning", "UNHELD"), ("fatal", "BR-02")])
         self.assertEqual(report.verdict, "invalid")
-        self.assertEqual([f.code for f in report.failures], ["REPEATED"])
+        # The rule that takes one number cannot be computed with two.
+        self.assertEqual([f.code for f in report.failures], ["REPEATED", "BR-02"])
 
     def test_a_warning_alone_is_not_invalid(self):
         _document, report = validate(changed(
@@ -171,7 +175,11 @@ class EachRuleFailsAlone(unittest.TestCase):
 
     Where one change must fail two rules because both compute with the amount
     changed, that is the last class in this file, and says which.
+
+    Four of these rules are published twice: BR-CO-21 to BR-CO-24 have the
+    same test as BR-33, BR-38, BR-42 and BR-44, so each fails with its twin.
     """
+    TWINS = {"BR-CO-21": "BR-33", "BR-CO-22": "BR-38", "BR-CO-23": "BR-42", "BR-CO-24": "BR-44"}
     CASES = {
         "BR-CO-03": ("<cbc:DocumentCurrencyCode>", "<cbc:TaxPointDate>2026-10-02</cbc:TaxPointDate>"
                      "<cbc:DocumentCurrencyCode>",
@@ -253,18 +261,23 @@ class EachRuleFailsAlone(unittest.TestCase):
         self.assertEqual(found(sample("xrechnung-invoice.xml").decode()), [])
 
     def test_every_rule_built_has_a_case(self):
-        self.assertEqual(set(self.CASES) | set(self.APART), set(REGISTRY["en16931"]))
+        self.assertEqual(set(self.CASES) | set(self.APART),
+                         {i for i in REGISTRY["en16931"] if not i[3:].isdigit()})
+
+    def expected(self, identifier: str) -> list:
+        return sorted({identifier, self.TWINS.get(identifier, identifier)})
 
     def test_each_change_fails_its_rule_and_no_other(self):
         for identifier, pairs in self.CASES.items():
             with self.subTest(rule=identifier):
-                self.assertEqual(failing(changed(INVOICE, *pairs)), [identifier])
+                self.assertEqual(failing(changed(INVOICE, *pairs)), self.expected(identifier))
 
     def test_the_same_changes_fail_the_same_rules_in_a_credit_note(self):
         for identifier in ("BR-CO-10", "BR-CO-16", "BR-CO-20", "BR-CO-23", "BR-DEC-23", "BR-DEC-24"):
             with self.subTest(rule=identifier):
                 pairs = [text.replace("InvoiceLine", "CreditNoteLine") for text in self.CASES[identifier]]
-                self.assertEqual(failing(changed(CREDIT_NOTE, *pairs)), [identifier])
+                self.assertEqual(failing(changed(CREDIT_NOTE, *pairs)),
+                                 self.expected(identifier))
 
     def test_no_vat_breakdown_fails_only_the_rule_that_wants_one(self):
         start, end = INVOICE.index("    <cac:TaxSubtotal>"), INVOICE.index("  </cac:TaxTotal>")
@@ -310,7 +323,8 @@ class WhatTheTestsSayExactly(unittest.TestCase):
         self.assertIn("it is nothing and the lines come to 0", finding.text)
 
     def test_without_the_totals_element_the_rules_about_it_are_not_asked(self):
-        self.assertEqual(failing(invoice("<cbc:ID>1</cbc:ID>")), ["BR-CO-18"])
+        asked = [i for i in failing(invoice("<cbc:ID>1</cbc:ID>")) if not i[3:].isdigit()]
+        self.assertEqual(asked, ["BR-CO-18"])
 
     def test_no_lines_sum_to_nought(self):
         self.assertNotIn("BR-CO-10", failing(self.totals(self.amount("LineExtensionAmount", "0"))))

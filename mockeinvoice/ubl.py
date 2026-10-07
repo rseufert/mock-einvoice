@@ -34,7 +34,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 from xml.parsers import expat
 from xml.sax.saxutils import escape, quoteattr
 
-from .model import NUMERIC, PARTY_ROLE, TERMS, Document, Finding, Group, Refused, Value
+from .model import (INVOICED_OBJECT_REFERENCE, NUMERIC, PARTY_ROLE, PROJECT_REFERENCE, TERMS,
+                    Document, Finding, Group, Refused, Value)
 
 INVOICE_NS = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
 CREDIT_NOTE_NS = "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
@@ -174,14 +175,17 @@ class Wrap:
     written here, for a term UBL has two places for. `marks` names the group of the
     standard that this element is, where that group occurs once: its terms go
     to the group around it, and if it held nothing, that it was there at all
-    is noted on that group, so it can be asked and is written back.
+    is noted on that group, so it can be asked and is written back. The two
+    references told by a type code are marked the same way, under names of
+    their own (`model.INVOICED_OBJECT_REFERENCE`), and are written back with
+    the type code that told them.
     """
 
     def __init__(self, tag: str, children: list, when: Optional[Callable] = None,
                  per: str = "", where: Optional[Callable[[Value], bool]] = None,
                  marks: str = ""):
         self.tag, self.children, self.when, self.per, self.where = tag, children, when, per, where
-        self.marks = marks      # the once-only group this element is: "BG-4"
+        self.marks = marks      # the once-only thing this element is: "BG-4"
 
 
 class Many:
@@ -331,7 +335,7 @@ def binding(kind: str) -> List[Entry]:
     contract = Wrap(cac("ContractDocumentReference"), [Leaf(cbc("ID"), "BT-12")])
     invoiced_object = Wrap(cac("AdditionalDocumentReference"), [
         Leaf(cbc("ID"), "BT-18", ["schemeID"]), Fixed(cbc("DocumentTypeCode"), "130")],
-        when=document_type("130"))
+        when=document_type("130"), marks=INVOICED_OBJECT_REFERENCE)
     supporting = [
         Leaf(cbc("ID"), "BT-122"), Leaf(cbc("DocumentDescription"), "BT-123"),
         Wrap(cac("Attachment"), [
@@ -349,7 +353,7 @@ def binding(kind: str) -> List[Entry]:
             contract, invoiced_object,
             Wrap(cac("AdditionalDocumentReference"), [
                 Leaf(cbc("ID"), "BT-11"), Fixed(cbc("DocumentTypeCode"), "50")],
-                when=document_type("50")),
+                when=document_type("50"), marks=PROJECT_REFERENCE),
             Many(cac("AdditionalDocumentReference"), "BG-24", supporting),
             originator]
 
@@ -731,6 +735,10 @@ def wrapped(entry: Wrap, inside: List[Tuple[Node, bool]], group: Group) -> List[
     node = Node(entry.tag)
     if all(fixed for _node, fixed in inside):
         if entry.marks and entry.marks in group.present:
+            if entry.when:
+                # What it was chosen by is fixed in it, and without that it
+                # would be read back as something else.
+                node.children = [child for child, _fixed in inside]
             return [(node, False)]
         if not inside or not always(entry):
             return []           # it has places for values, and there were none
