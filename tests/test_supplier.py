@@ -5,9 +5,8 @@ import unittest
 from mockeinvoice.buyer import ORDER, Buyer, TurnedAway
 from mockeinvoice.supplier import NotSent, Supplier
 
-from . import sample
+from . import sample, unbuilt
 from .test_buyer import CREDIT_NOTE, INVOICE, REF, XRECHNUNG
-from .test_peppol_rules import french
 
 NOON = datetime.datetime(2026, 10, 7, 12, 0, 30)
 BROKEN = INVOICE.replace("<cbc:ID>GLX-4711</cbc:ID>", "", 1)
@@ -41,13 +40,12 @@ class Sending(unittest.TestCase):
         self.assertIsNone(Supplier().send(INVOICE).delivery)
 
     def test_one_that_is_not_valid_is_not_sent(self):
-        swedish = french(INVOICE).replace("<cbc:IdentificationCode>FR<",
-                                          "<cbc:IdentificationCode>SE<")
-        for document, code, verdict in ((BROKEN, "INVALID", "invalid"),
-                                        (swedish, "NOT-JUDGED", "not judged")):
+        # The second is the package as it would be without Germany's rules.
+        for document, missing, code, verdict in ((BROKEN, "-", "INVALID", "invalid"),
+                                                 (INVOICE, "DE-R-", "NOT-JUDGED", "not judged")):
             delivered = []
             supplier = Supplier(deliver=delivered.append)
-            with self.assertRaises(NotSent) as raised:
+            with unbuilt("peppol", missing), self.assertRaises(NotSent) as raised:
                 supplier.send(document)
             self.assertEqual((raised.exception.code, raised.exception.report.verdict),
                              (code, verdict))

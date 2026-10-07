@@ -9,13 +9,13 @@ python3 -m pip install mock-einvoice
 mock-einvoice --port 8100
 ```
 
-It reads and writes UBL invoices and credit notes, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to Peppol's own 63 and the 31 it has for Germany, and to the 34 of a standard XRechnung document; responses to all 82 of theirs. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones, and a supplier that sends them and takes the answers.
+It reads and writes UBL invoices and credit notes, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to all 165 of Peppol's (its own 63, the 31 it has for Germany and the 71 for seven other countries), and to the 34 of a standard XRechnung document; responses to all 82 of theirs. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones, and a supplier that sends them and takes the answers.
 
 **What 0.1.0 is not:**
 
 - **It writes no invoices of its own.** The supplier sends the documents it is given.
 - **It knows nothing of the other mocks.** Writing an invoice from one of mock-sap's billing documents, and saying "paid" when SAP has cleared it, is integration, and belongs in [mock-acme](https://github.com/rseufert/mock-acme) with the rest of it. It is not built there yet.
-- **A Peppol document from a seller in Denmark, Greece, Iceland, Italy, the Netherlands, Norway or Sweden is at best "not judged"**, and the server does not take it in: Peppol's 71 rules for those countries are not built ([#18](https://github.com/rseufert/mock-einvoice/issues/18)). An XRechnung document, and a Peppol document from Germany or from a country Peppol has no national rules for, can be "valid".
+- **Peppol's ten rules for a seller in Iceland are held to this project's tests only.** Peppol publishes unit tests for its rules for Denmark, Greece, Italy, the Netherlands, Norway and Sweden, and every case agrees here; for Iceland it publishes none. Those ten were written from the same reading of the rule file as the tests that hold them, so a misreading would be in both.
 - **No CII, no XRechnung Extension, no ZUGFeRD**, and no transport: see [What it refuses](#what-it-refuses) and [Known to be wrong, or not real](#known-to-be-wrong-or-not-real).
 
 ## What is built
@@ -70,12 +70,14 @@ A document names its specification, and that decides its layers:
 | Layer | Pinned to | Published rules | Built |
 | --- | --- | --- | --- |
 | EN 16931 core | [validation artefacts 1.3.16](https://github.com/ConnectingEurope/eInvoicing-EN16931/tree/validation-1.3.16) | 979 (281 fatal) | all 979: what a document must have in it (`BR-01` to `BR-65`), the calculation rules (`BR-CO-*`), the decimals rules (`BR-DEC-*`), the ten families of VAT category rules, the code lists (`BR-CL-*`), and the 756 rules about the UBL document itself (`UBL-CR-*`, `UBL-DT-*`, `UBL-SR-*`) |
-| Peppol BIS Billing 3.0 | 3.0.21, at commit [`806866b`](https://github.com/OpenPEPPOL/peppol-bis-invoice-3/commit/806866bd2bd91d7e9623b68f08164e8fbe9e67a0) (it has no tag) | 165 (139 fatal) | 94: Peppol's own 63 (`PEPPOL-EN16931-*`, `PEPPOL-COMMON-*`) and Germany's 31 (`DE-R-*`). Not the 71 for a seller in another country (`DK-R`, `GR-R`, `IS-R`, `IT-R`, `NL-R`, `NO-R`, `SE-R`) |
+| Peppol BIS Billing 3.0 | 3.0.21, at commit [`806866b`](https://github.com/OpenPEPPOL/peppol-bis-invoice-3/commit/806866bd2bd91d7e9623b68f08164e8fbe9e67a0) (it has no tag) | 165 (139 fatal) | all 165: Peppol's own 63 (`PEPPOL-EN16931-*`, `PEPPOL-COMMON-*`), Germany's 31 (`DE-R-*`), and the 71 for a seller in Denmark, Greece, Iceland, Italy, the Netherlands, Norway or Sweden (`DK-R`, `GR-R`, `GR-S`, `IS-R`, `IT-R`, `NL-R`, `NO-R`, `SE-R`) |
 | XRechnung 3.0 | [Schematron 2.6.0](https://github.com/itplr-kosit/xrechnung-schematron/tree/v2.6.0) | 56 (46 fatal) | 34: every rule of a standard XRechnung document (`BR-DE-*`, `BR-TMP-2`, `BR-TMP-6`). Not the 22 of XRechnung Extension and CVD (`BR-DEX-*`, `BR-DE-CVD-*`), whose documents are refused by name |
 
-**Not built is said, never assumed.** `mockeinvoice/rules/published.py` lists every published rule of every layer by identifier and flag, and a report lists the ones that did not run. A document nothing was found wrong with is `not judged`, not `valid`, for as long as a fatal rule that could apply to it is unbuilt.
+**Not built is said, never assumed.** `mockeinvoice/rules/published.py` lists every published rule of every layer by identifier and flag, and a report lists the ones that did not run. A document nothing was found wrong with is `not judged`, not `valid`, for as long as a fatal rule that could apply to it is unbuilt. Every rule that can apply to a document this package takes is built, so no document is `not judged` today; the verdict is kept for the day a specification publishes a rule before this package has it.
 
-**A rule that could not apply is not waited on.** Peppol's rules for a seller in one country say nothing of a document from another, and the rules of XRechnung Extension and CVD say nothing of a standard XRechnung document. A report lists them apart, as `not_applicable`, and they do not hold back its verdict. A document counts as one of a country's if the seller's VAT identifier, its tax representative's, or its address says so: all three at once, which is never narrower than the published rules' own test, so nothing is waved through that a national rule could have caught.
+**A rule that could not apply is not waited on.** The rules of XRechnung Extension and CVD say nothing of a standard XRechnung document. A report lists them apart, as `not_applicable`, and they do not hold back its verdict.
+
+**Where a seller is, is not one question.** Peppol's rules for a seller's country do not agree on what makes a document one of theirs. Norway, Italy and Greece go by the first two letters of the seller's VAT identifier, then its tax representative's, and only then by the country of its address. Denmark, Iceland and Sweden go by the address, written exactly (`dk` is not Denmark). The Netherlands goes by the address however it is written. Each rule here goes by what its published test goes by, and `mockeinvoice/rules/peppol_national.py` says which.
 
 **Two things a rule is asked of.** Most rules are asked of the model. The 756 about the UBL document itself are asked of its elements, because they are about elements the standard has no term for and the model does not hold: `validate(xml)` asks them of the document as it was sent. `check(document, specification)`, given a model and no XML, asks them of the document that model would be written as. Where one of them reports an element, the reader's own finding about that element (`UNHELD`, `REPEATED`) is left out, so an element is reported once, under the published rule's name where there is one.
 
@@ -306,15 +308,16 @@ The rules, the reader and the writer are tested against files this project did n
 | EN 16931 examples | 17 documents | read, written back, and compared element for element by a reader that is not this one |
 | XRechnung test suite | 39 valid XRechnung 3.0 documents | read with nothing to say, written back element for element, and every one is `valid`: no rule of the core's 979 or XRechnung's 34 fails or warns. Seventeen are told, as information, that they do not say when they were delivered (`BR-DE-TMP-32`) |
 | XRechnung test suite | 5 Extension and 1 CVD document | refused by name |
-| Peppol unit tests | 400 cases | all 396 agree: 331 for Peppol's own rules and 65 for Germany's. The other 4 are about a UBL Order |
+| Peppol unit tests | 673 cases, with 678 things said of a rule | all 678 agree: 331 for Peppol's own rules, 65 for Germany's and 282 for the other six countries that have any. 4 cases are about a UBL Order. Iceland's ten rules have none |
 | Peppol Invoice Response | 14 examples and 13 unit test cases | every example is read with nothing to say, written back element for element, and no rule has anything to say of it; all 13 cases agree. The structure and the code lists here are compared with the ones Peppol describes |
-| Peppol examples | 10 documents | read with nothing to say, written back element for element, and no rule has anything to say of them. Nine are `valid`; the tenth is from a seller in Sweden, whose rules are not built, and is `not judged` |
+| Peppol examples | 10 documents | read with nothing to say, written back element for element, and no rule has anything to say of them. All ten are `valid` |
+| Peppol national examples | 3 documents, kept by Peppol's national authorities | two are `valid` with a warning each; the third, a Greek invoice through a tax representative, is `invalid` by the core's `BR-06`, because its seller has no legal name |
 
 - **A case for a rule that is not built is never counted as agreeing.** The counts are written out in `tests/test_upstream.py`, so building a rule moves a number there on purpose.
 - **A disagreement is a failure here** until the published rule shows the case to be wrong; then it is listed in `tests/upstream.py` by name, with the reason. None is.
 - **To read the counts:** `python -m tests.upstream`. CI prints them on every run.
 
-Peppol's files are not in this repository (see Licences). `python tools/fetch_peppol.py` fetches the 101 listed in `tools/peppol-files.tsv` (billing's examples, its unit tests, and the rule file itself, which a test reads Peppol's code lists from) and the 28 in `tools/peppol-response-files.tsv` (the Invoice Response's examples, unit tests, hand-written rules, code lists and the description of its structure) from the pinned commit, checks each against the git hash listed for it, and puts them where the tests look. Without them those two tests are skipped and say so. CI fetches them on two of its jobs.
+Peppol's files are not in this repository (see Licences). `python tools/fetch_peppol.py` fetches the 167 listed in `tools/peppol-files.tsv` (billing's examples and national examples, its unit tests, and the rule file itself, which a test reads Peppol's code lists from) and the 28 in `tools/peppol-response-files.tsv` (the Invoice Response's examples, unit tests, hand-written rules, code lists and the description of its structure) from the pinned commit, checks each against the git hash listed for it, and puts them where the tests look. Without them those two tests are skipped and say so. CI fetches them on two of its jobs.
 
 Two things were checked while building and are not tests, because their sources are not here:
 

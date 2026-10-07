@@ -1,10 +1,9 @@
 """Peppol BIS Billing 3.0: the rules Peppol adds to the EN 16931 core.
 
 Here: Peppol's own 63 rules, asked of every Peppol document
-(`PEPPOL-EN16931-*` and `PEPPOL-COMMON-*`). Germany's are in `peppol_de.py`.
-The rules for a seller in another country (`DK-R`, `SE-R` and the rest) are
-not built; `SCOPES` says which documents they can apply to, so that a
-document from elsewhere does not wait on them.
+(`PEPPOL-EN16931-*` and `PEPPOL-COMMON-*`). Germany's are in `peppol_de.py`,
+and the rules for a seller in one of seven other countries (`DK-R`, `SE-R`
+and the rest) in `peppol_national.py`.
 
 All of these are asked of the document's elements (`tree.py`), as the rules
 about UBL itself are: many of them are about what the model does not keep,
@@ -44,7 +43,7 @@ from __future__ import annotations
 import functools
 import re
 from decimal import Decimal
-from typing import Callable, Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Callable, Iterator, List, Optional, Sequence, Tuple
 
 from . import Failure, rule
 from .calculation import (Incomputable, cents, date_of, decimal_of, double_sum, doubles_of,
@@ -746,35 +745,3 @@ def f001(root: At) -> Iterator[Failure]:
             well_formed = False
         if not well_formed:
             yield at.path, "it is %r" % at.text
-
-
-# -- the rules for a seller's country, which are not built ----------------------------------
-
-def sellers_countries(root: At) -> List[str]:
-    """Every country the published tests could take the seller to be in.
-
-    They decide it three ways between them: by the first two letters of the
-    seller's VAT identifier, or its tax representative's, or by the country
-    of the seller's address. This is all of those at once, so that it is
-    never narrower than any of them.
-    """
-    found = [normalize_space(at.text[:2]).upper()
-             for party in ("%s/cac:PartyTaxScheme/cbc:CompanyID" % SELLER,
-                           "cac:TaxRepresentativeParty/cac:PartyTaxScheme/cbc:CompanyID")
-             for at in elements(root, party)]
-    return found + [normalize_space(at.text).upper()
-                    for at in elements(root, "%s/%s" % (SELLER, COUNTRY))]
-
-
-def from_(*countries: str) -> Callable[[At], bool]:
-    return lambda root: any(country in sellers_countries(root) for country in countries)
-
-
-# The national rule sets, by the start of their rules' names: whether a
-# document is one they can apply to. Every one of their published contexts
-# asks for the seller's country in one of the three ways above.
-SCOPES: Dict[str, Callable[[At], bool]] = {
-    "DK-R-": from_("DK"), "GR-R-": from_("GR", "EL"),
-    "GR-S-": from_("GR", "EL"), "IS-R-": from_("IS"), "IT-R-": from_("IT"),
-    "NL-R-": from_("NL"), "NO-R-": from_("NO"), "SE-R-": from_("SE"),
-}

@@ -50,7 +50,9 @@ SETS = {
     "response": (os.path.join(FETCHED, "peppol-response", "rules"), ("peppol-response",)),
 }
 # Peppol's are fetched, not carried: see tools/fetch_peppol.py.
-PEPPOL_DIRECTORIES = ("unit-UBL-PEPPOL", "unit-UBL-DE", "unit-invoice-response")
+PEPPOL_DIRECTORIES = ("unit-UBL-PEPPOL", "unit-UBL-DE", "unit-UBL-DK", "unit-UBL-GR",
+                      "unit-UBL-IT", "unit-UBL-NL", "unit-UBL-NO", "unit-UBL-SE",
+                      "unit-invoice-response")
 
 # Cases this project holds to be wrong, by (file, number of the test in it,
 # rule): the reason, with the published rule's own test to show it. None yet.

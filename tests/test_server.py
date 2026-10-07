@@ -17,9 +17,8 @@ from mockeinvoice.buyer import Buyer
 from mockeinvoice.server import LARGEST, PORT, arguments, poster, serve
 from mockeinvoice.supplier import Supplier
 
-from . import sample
+from . import sample, unbuilt
 from .test_buyer import INVOICE, WITH_RESPONSE, XRECHNUNG
-from .test_peppol_rules import french
 
 NOON = datetime.datetime(2026, 10, 7, 12, 0, 30)
 REJECTED = {"code": "RE", "reasons": [{"code": "REF", "text": "no purchase order",
@@ -100,13 +99,13 @@ class TheNetworksSide(Served):
         self.assertEqual(self.call("GET", "/_mock/invoices")[2], [])
 
     def test_one_that_could_not_be_judged_is_422_with_the_rules_not_run(self):
-        swedish = french(INVOICE).replace("<cbc:IdentificationCode>FR<",
-                                          "<cbc:IdentificationCode>SE<")
-        status, _headers, body = self.call("POST", "/invoices", swedish)
+        # Every rule is built, so this is the server as it would be without
+        # two of Germany's.
+        with unbuilt("peppol", "DE-R-001", "DE-R-002"):
+            status, _headers, body = self.call("POST", "/invoices", INVOICE)
         self.assertEqual((status, body["error"], body["verdict"], body["findings"]),
                          (422, "NOT-JUDGED", "not judged", []))
-        self.assertEqual(body["not_run"], ["SE-R-001", "SE-R-002", "SE-R-003", "SE-R-004",
-                                           "SE-R-005", "SE-R-006", "SE-R-013"])
+        self.assertEqual(body["not_run"], ["DE-R-001", "DE-R-002"])
 
     def test_what_is_not_taken_is_400_by_the_refusals_code(self):
         for document, code in (("hello", "NOT-XML"), ("<a/>", "NOT-UBL"),

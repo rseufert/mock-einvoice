@@ -6,8 +6,7 @@ from mockeinvoice import response, validate_response
 from mockeinvoice.buyer import (ORDER, PROCESS, Buyer, NotSaid, Sent, TurnedAway,
                                 out_of_order)
 
-from . import sample
-from .test_peppol_rules import french
+from . import sample, unbuilt
 
 INVOICE = sample("peppol-invoice.xml").decode("utf-8")
 CREDIT_NOTE = sample("peppol-creditnote.xml").decode("utf-8")
@@ -53,14 +52,15 @@ class TakingIn(unittest.TestCase):
                          [("2026-10-07T12:00:30", "INVALID")])
 
     def test_one_that_could_not_be_judged_is_turned_away_naming_the_rules(self):
-        swedish = french(INVOICE).replace("<cbc:IdentificationCode>FR<",
-                                          "<cbc:IdentificationCode>SE<")
-        with self.assertRaises(TurnedAway) as raised:
-            buyer().receive(swedish)
+        # Every rule is built, so this is the package as it would be without
+        # Germany's: what a rule published before it is built comes to.
+        with unbuilt("peppol", "DE-R-"), self.assertRaises(TurnedAway) as raised:
+            buyer().receive(INVOICE)
         away = raised.exception
         self.assertEqual((away.code, away.report.verdict), ("NOT-JUDGED", "not judged"))
-        self.assertIn("SE-R-001", away.reason)
-        self.assertIn("7 fatal rules", away.reason)
+        self.assertIn("DE-R-001", away.reason)
+        self.assertIn("24 fatal rules", away.reason)
+        self.assertEqual(buyer().receive(INVOICE).report.verdict, "valid")
 
     def test_what_is_not_taken_is_turned_away_by_the_refusals_own_code(self):
         for document, code in (("hello", "NOT-XML"), (sample("peppol-response.xml"),
