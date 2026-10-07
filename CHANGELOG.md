@@ -9,11 +9,21 @@ says so where it does.
 ## [Unreleased]
 
 Nothing is released yet. What is here reads and writes invoices and holds them
-to every rule of the EN 16931 core, to Peppol's own rules and to its rules
-for Germany.
+to every rule of the EN 16931 core, to Peppol's own rules and its rules for
+Germany, and to XRechnung's.
 
 ### Added
 
+- **XRechnung 3.0's rules** ([#19]): the 34 of a standard XRechnung document,
+  `BR-DE-*`, `BR-TMP-2` and `BR-TMP-6`. Thirty-one are the same tests as
+  Peppol's rules for Germany and are written once, registered under each
+  layer's names. An XRechnung document with nothing found wrong is now
+  `valid`: all 39 valid documents of the XRechnung test suite are. The rules
+  of XRechnung Extension and CVD are not built; their documents are still
+  refused by name, and a standard document does not wait on them.
+- **A finding can be information** ([#19]): XRechnung publishes one rule
+  flagged `information`, and it is reported as that. It is no failure and no
+  warning.
 - **Peppol's rules for Germany** ([#17]): `DE-R-001` to `DE-R-031` and
   `DE-R-T02`, 31 rules, asked where seller and buyer are both in Germany.
   All 65 of Peppol's unit test cases for them agree, which makes all 396 of
@@ -146,3 +156,4 @@ for Germany.
 [#11]: https://github.com/rseufert/mock-einvoice/issues/11
 [#16]: https://github.com/rseufert/mock-einvoice/issues/16
 [#17]: https://github.com/rseufert/mock-einvoice/issues/17
+[#19]: https://github.com/rseufert/mock-einvoice/issues/19

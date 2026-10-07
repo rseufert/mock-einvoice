@@ -1,7 +1,7 @@
 """mock-einvoice: EN 16931 invoices, read, held to their rules, and answered.
 
 So far: UBL 2.1 invoices and credit notes in and out, the rules of the
-EN 16931 core, Peppol's own, and Peppol's for Germany.
+EN 16931 core, Peppol's own and Peppol's for Germany, and XRechnung's.
 
     from mockeinvoice import read, validate, write
 
