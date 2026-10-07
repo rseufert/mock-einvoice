@@ -26,15 +26,18 @@ from __future__ import annotations
 
 from typing import List, Tuple, Union
 
+from . import response as _response
 from . import specification as _specification
 from .model import Document, Finding, Group, Refused, Value
-from .rules import Report, check
+from .response import Response
+from .rules import Report, check, check_response
 from .ubl import parse, parse_tree, write
 
 __version__ = "0.1.0.dev0"
 
-__all__ = ["Document", "Finding", "Group", "Refused", "Report", "Value", "check", "read",
-           "validate", "write", "__version__"]
+__all__ = ["Document", "Finding", "Group", "Refused", "Report", "Response", "Value", "check",
+           "read", "read_response", "validate", "validate_response", "write", "write_response",
+           "__version__"]
 
 
 def read(data: Union[bytes, str]) -> Tuple[Document, str, List[Finding]]:
@@ -52,3 +55,20 @@ def validate(data: Union[bytes, str]) -> Tuple[Document, Report]:
     document, findings, sent = parse_tree(data)
     specification = _specification.identify(document)
     return document, check(document, specification, findings, sent)
+
+
+def read_response(data: Union[bytes, str]) -> Tuple[Response, List[Finding]]:
+    """Read a Peppol Invoice Response, and what the reader has to say of it.
+    Raises `Refused` for what is not one."""
+    return _response.read(data)
+
+
+def write_response(response: Response) -> bytes:
+    """Write an Invoice Response as a UBL `ApplicationResponse`."""
+    return _response.write(response)
+
+
+def validate_response(data: Union[bytes, str]) -> Tuple[Response, Report]:
+    """Read an Invoice Response and hold it to its rules."""
+    response, findings, sent = _response.parse_tree(data)
+    return response, check_response(sent, findings)

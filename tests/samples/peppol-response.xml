@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApplicationResponse xmlns="urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:fdc:peppol.eu:poacc:trns:invoice_response:3</cbc:CustomizationID>
+  <cbc:ProfileID>urn:fdc:peppol.eu:poacc:bis:invoice_response:3</cbc:ProfileID>
+  <cbc:ID>ACME-IMR-0001</cbc:ID>
+  <cbc:IssueDate>2026-10-05</cbc:IssueDate>
+  <cbc:IssueTime>09:30:00</cbc:IssueTime>
+  <cbc:Note>The purchase order number is missing from line 2.</cbc:Note>
+  <cac:SenderParty>
+    <cbc:EndpointID schemeID="0088">4098765000003</cbc:EndpointID>
+    <cac:PartyIdentification>
+      <cbc:ID schemeID="0088">4098765000003</cbc:ID>
+    </cac:PartyIdentification>
+    <cac:PartyLegalEntity>
+      <cbc:RegistrationName>ACME Corporation</cbc:RegistrationName>
+    </cac:PartyLegalEntity>
+    <cac:Contact>
+      <cbc:Name>Accounts payable</cbc:Name>
+      <cbc:Telephone>+49 30 000000</cbc:Telephone>
+      <cbc:ElectronicMail>ap@acme.example</cbc:ElectronicMail>
+    </cac:Contact>
+  </cac:SenderParty>
+  <cac:ReceiverParty>
+    <cbc:EndpointID schemeID="0088">4012345000009</cbc:EndpointID>
+    <cac:PartyIdentification>
+      <cbc:ID schemeID="0088">4012345000009</cbc:ID>
+    </cac:PartyIdentification>
+    <cac:PartyLegalEntity>
+      <cbc:RegistrationName>Globex GmbH</cbc:RegistrationName>
+    </cac:PartyLegalEntity>
+  </cac:ReceiverParty>
+  <cac:DocumentResponse>
+    <cac:Response>
+      <cbc:ResponseCode>UQ</cbc:ResponseCode>
+      <cbc:EffectiveDate>2026-10-05</cbc:EffectiveDate>
+      <cac:Status>
+        <cbc:StatusReasonCode listID="OPStatusReason">REF</cbc:StatusReasonCode>
+        <cbc:StatusReason>No purchase order line is named on line 2.</cbc:StatusReason>
+        <cac:Condition>
+          <cbc:AttributeID>BT-132</cbc:AttributeID>
+          <cbc:Description>20</cbc:Description>
+        </cac:Condition>
+      </cac:Status>
+      <cac:Status>
+        <cbc:StatusReasonCode listID="OPStatusAction">PIN</cbc:StatusReasonCode>
+      </cac:Status>
+    </cac:Response>
+    <cac:DocumentReference>
+      <cbc:ID>GLX-4711</cbc:ID>
+      <cbc:IssueDate>2026-10-02</cbc:IssueDate>
+      <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
+    </cac:DocumentReference>
+    <cac:IssuerParty>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="0088">4012345000009</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name>Globex GmbH</cbc:Name>
+      </cac:PartyName>
+    </cac:IssuerParty>
+    <cac:RecipientParty>
+      <cac:PartyName>
+        <cbc:Name>ACME Corporation</cbc:Name>
+      </cac:PartyName>
+    </cac:RecipientParty>
+  </cac:DocumentResponse>
+</ApplicationResponse>

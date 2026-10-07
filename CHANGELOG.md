@@ -14,6 +14,14 @@ Germany, and to XRechnung's.
 
 ### Added
 
+- **The Peppol Invoice Response** ([#23]): what a buyer answers an invoice
+  with. A model, a reader and a writer for the UBL `ApplicationResponse`
+  (`read_response`, `write_response`, `validate_response`), and all 82 of its
+  published rules, pinned to release 3.0.17. Peppol's fourteen examples are
+  read, written back element for element and are `valid`, and its unit tests
+  agree. One rule holds a type code to UNTDID 1001; its 727 code values are
+  taken from the United Nations' own directory, edition D.17A, without their
+  names or descriptions.
 - **XRechnung 3.0's rules** ([#19]): the 34 of a standard XRechnung document,
   `BR-DE-*`, `BR-TMP-2` and `BR-TMP-6`. Thirty-one are the same tests as
   Peppol's rules for Germany and are written once, registered under each
@@ -157,3 +165,4 @@ Germany, and to XRechnung's.
 [#16]: https://github.com/rseufert/mock-einvoice/issues/16
 [#17]: https://github.com/rseufert/mock-einvoice/issues/17
 [#19]: https://github.com/rseufert/mock-einvoice/issues/19
+[#23]: https://github.com/rseufert/mock-einvoice/issues/23

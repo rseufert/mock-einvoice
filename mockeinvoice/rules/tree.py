@@ -18,6 +18,7 @@ from .calculation import Incomputable, normalize_space
 NAMESPACES = {
     "cac": CAC_NS, "cbc": CBC_NS, "ubl": INVOICE_NS, "cn": CREDIT_NOTE_NS,
     "ext": "urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2",
+    "res": "urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2",
 }
 ROOT = "/ubl:Invoice | /cn:CreditNote"
 PREDICATE = re.compile(r"(\w+:\w+)\[cbc:ChargeIndicator = (true|false)\(\)\]")

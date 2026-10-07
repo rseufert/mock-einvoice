@@ -1,0 +1,28 @@
+67f133577d942d1cc33587f795f2c8132ee92d7d	1593	rules/examples/Invoice reponse use cases/T111-uc001-Invoice in process.xml
+70a60e5a0ab4f91055d604f33d52399ef67db681	2214	rules/examples/Invoice reponse use cases/T111-uc002a-Additional reference data.xml
+d10cb97c283dc83a330e1924deb3b4a8f326910c	1838	rules/examples/Invoice reponse use cases/T111-uc002b-In process but postponed.xml
+054a184c1851b78eacabfdc2314ecd8525bad49a	1594	rules/examples/Invoice reponse use cases/T111-uc003-Invoice is accepted.xml
+929f8eb2deead225ebfc744d140b440c1cf38585	1838	rules/examples/Invoice reponse use cases/T111-uc004a-Invoice is rejected.xml
+6c18f2cd958cf8a66ad45046d5f1df5a73a581a3	1841	rules/examples/Invoice reponse use cases/T111-uc004b-Rejected requesting reissue.xml
+4321a8840e435336a6c2966b1a254adc929e266e	1955	rules/examples/Invoice reponse use cases/T111-uc004c-Rejected requesting replacement.xml
+5a001fd497eb88c38d22d2245595fa58580de4df	2001	rules/examples/Invoice reponse use cases/T111-uc005-Invoice is conditionally accepted.xml
+683d56e3fc9f6ddf79fcd19525e25bded229570c	2224	rules/examples/Invoice reponse use cases/T111-uc006a-Under query missing information.xml
+683d56e3fc9f6ddf79fcd19525e25bded229570c	2224	rules/examples/Invoice reponse use cases/T111-uc006b-Missing PO.xml
+058450d2220b1caee53748d7d53e7f915919c2df	2124	rules/examples/Invoice reponse use cases/T111-uc006c-Wrong detail partial credit.xml
+8e978b91f650addf484cae5b62a450dcf3279088	1732	rules/examples/Invoice reponse use cases/T111-uc007-Payment has been initiated.xml
+b98f596196134b4895dd6f3b58ed0cee184fa11c	2026	rules/examples/Invoice reponse use cases/T111-uc008-Invoice is accepted by third party.xml
+21cd2b7c827635135ae3c735b4fa908a6f91211a	2575	rules/examples/InvoiceResponse_Example.xml
+44951fef28c85ff8ce9dcf8dc77e4076d0072d51	1006	rules/sch/parts/PEPPOL-M-T111-2.sch
+baf2998854de7cb4092332d1308a6edff87bc510	1915	rules/sch/parts/PEPPOL-M-T111.sch
+dd35dd656b4ac67e7bd62f4b19348affb950791c	315	rules/sch/parts/common/empty-elements.sch
+c4e6b50fb19c6d22349d4ca562c687dc90de9deb	7951	rules/sch/parts/common/rules.sch
+23c738dade1f68d51caf8f3e81c1ede6dbd971be	3936	rules/unit-invoice-response/PEPPOL-T111-R001.xml
+3ea4e3c3696ee2c266ed237cce759227cc783cb6	2810	rules/unit-invoice-response/PEPPOL-T111-R002.xml
+fa5ef208921e14c697f9d75e27b4aa5df536e7c1	2313	rules/unit-invoice-response/PEPPOL-T111-R004.xml
+8c046cde82450ef244812729b7ec4ca77ac78a03	81377	structure/codelist/ICD.xml
+ff57199623b3706dce538d4e2c3601ccf24d0291	1423	structure/codelist/OPStatusAction.xml
+760089415456760cc460debc31d38df2f72ac499	2807	structure/codelist/OPStatusReason.xml
+76187093c14cd48da264d329e88698d717557cb1	2818	structure/codelist/UNCL4343-T111.xml
+f181b1040bd9700d88d4a01e8d3ab3d48c32875e	7109	structure/codelist/eas.xml
+94cd4a44c44ae83bed33f6b7e8d4f5db5b0261bb	19889	structure/syntax/ubl-invoiceresponse.xml
+17e4fb3410ad29aa4e1b431e60a3741c9ca6d8d6	201537	structure/codelist/UNCL1001.xml

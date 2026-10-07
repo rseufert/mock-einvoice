@@ -35,7 +35,7 @@ import xml.etree.ElementTree as ET
 
 from mockeinvoice import Refused, rules
 from mockeinvoice.rules import REGISTRY, published
-from mockeinvoice.ubl import parse_tree
+from mockeinvoice.ubl import parse_tree, tree
 
 from . import EXTERNAL, SAMPLES
 
@@ -47,9 +47,10 @@ FETCHED = os.path.join(SAMPLES, "fetched")
 SETS = {
     "en16931": (os.path.join(EXTERNAL, "en16931", "unit"), ("en16931",)),
     "peppol": (os.path.join(FETCHED, "peppol", "rules"), ("en16931", "peppol")),
+    "response": (os.path.join(FETCHED, "peppol-response", "rules"), ("peppol-response",)),
 }
 # Peppol's are fetched, not carried: see tools/fetch_peppol.py.
-PEPPOL_DIRECTORIES = ("unit-UBL-PEPPOL", "unit-UBL-DE")
+PEPPOL_DIRECTORIES = ("unit-UBL-PEPPOL", "unit-UBL-DE", "unit-invoice-response")
 
 # Cases this project holds to be wrong, by (file, number of the test in it,
 # rule): the reason, with the published rule's own test to show it. None yet.
@@ -71,7 +72,7 @@ def files(name: str):
     folder, _layers = SETS[name]
     for directory in sorted(os.listdir(folder)) if os.path.isdir(folder) else ():
         inside = os.path.join(folder, directory)
-        if not os.path.isdir(inside) or (name == "peppol"
+        if not os.path.isdir(inside) or (name != "en16931"
                                          and directory not in PEPPOL_DIRECTORIES):
             continue
         for entry in sorted(os.listdir(inside)):
@@ -105,11 +106,16 @@ def tally(name: str):
         counts["files"] += 1
         for number, expectations, data in cases(path):
             counts["cases"] += 1
-            try:
-                document, findings, sent = parse_tree(data)
-            except Refused:
-                counts["not ours"] += 1
-                continue
+            if name == "response":
+                # A response has no model the rules are asked of, and these
+                # are fragments the reader would refuse: its elements are all.
+                document, findings, sent = None, [], tree(data)
+            else:
+                try:
+                    document, findings, sent = parse_tree(data)
+                except Refused:
+                    counts["not ours"] += 1
+                    continue
             fired = {finding.code: finding.level
                      for layer in layers for finding in rules.run(document, layer, sent)}
             for kind, identifier in expectations:
@@ -139,7 +145,7 @@ def main() -> None:
         counts, disagreements, not_built = tally(name)
         if not counts["files"]:
             print("%-8s not here%s" % (name, " (python tools/fetch_peppol.py fetches it)"
-                                       if name == "peppol" else ""))
+                                       if name != "en16931" else ""))
             continue
         print("%-8s %d files, %d cases, %d expectations: %d agree, %d disagree, %d for %d "
               "rules not built, %d for rules not published, %d documents not ours, %d in "

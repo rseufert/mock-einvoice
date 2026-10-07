@@ -58,6 +58,9 @@ from . import published
 from .calculation import Incomputable
 
 LAYERS_OF = {"peppol": ("en16931", "peppol"), "xrechnung": ("en16931", "xrechnung")}
+# A response to an invoice is held to one layer, and has no model the rules
+# are asked of: every one of them is about its elements.
+RESPONSE = "peppol-response"
 FAILING = ("fatal", "error")
 
 # A failure a rule reports: where in the model, and what was found there.
@@ -164,6 +167,20 @@ def check(document: Document, specification: str,
     return report
 
 
+def check_response(sent, reading: Sequence[Finding] = ()) -> Report:
+    """Hold an Invoice Response to its rules: `sent` is its elements
+    (`response.parse_tree`), and `reading` what the reader said of it."""
+    report = Report(RESPONSE)
+    report.findings.extend(run(None, RESPONSE, sent))
+    report.ran.extend(REGISTRY[RESPONSE])
+    report.not_built[RESPONSE] = {identifier: flag
+                                  for identifier, flag in published.LAYERS[RESPONSE].items()
+                                  if identifier not in REGISTRY[RESPONSE]}
+    report.not_applicable[RESPONSE] = {}
+    report.findings[:0] = unsaid(reading, report.findings)
+    return report
+
+
 # By layer, the rule sets that are for some documents only: the start of
 # their rules' names, and whether a document is one of theirs. Filled by the
 # layer's module. A set is listed only where every one of its published rules
@@ -227,6 +244,7 @@ from . import peppol as _peppol  # noqa: E402,F401
 from . import peppol_de as _peppol_de  # noqa: E402,F401
 
 from . import xrechnung as _xrechnung  # noqa: E402,F401
+from . import peppol_response as _peppol_response  # noqa: E402,F401
 
 SCOPES["peppol"].update(_peppol.SCOPES)
 SCOPES["xrechnung"].update(_xrechnung.SCOPES)

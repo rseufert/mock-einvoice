@@ -16,6 +16,9 @@ SOURCES = {
     "xrechnung": ("XRechnung Schematron 2.6.0",
                   "https://github.com/itplr-kosit/xrechnung-schematron/blob/v2.6.0/"
                   "src/validation/schematron/ubl/XRechnung-UBL-validation.sch"),
+    "peppol-response": ("Peppol Invoice Response 3.0.17",
+                        "https://github.com/OpenPEPPOL/poacc-upgrade-3/blob/"
+                        "ad6828c94f8090bdfd620df4e48b213977afa2cb/rules/sch/PEPPOLBIS-T111.sch"),
 }
 
 EN16931 = dict(line.split() for line in '''
@@ -1227,4 +1230,90 @@ BR-DE-CVD-04 fatal
 BR-DE-CVD-05 fatal
 '''.splitlines() if line)
 
-LAYERS = {"en16931": EN16931, "peppol": PEPPOL, "xrechnung": XRECHNUNG}
+PEPPOL_RESPONSE = dict(line.split() for line in '''
+PEPPOL-COMMON-R001 fatal
+PEPPOL-COMMON-R003 warning
+PEPPOL-COMMON-R030 fatal
+PEPPOL-COMMON-R040 fatal
+PEPPOL-COMMON-R041 fatal
+PEPPOL-COMMON-R042 fatal
+PEPPOL-COMMON-R052 fatal
+PEPPOL-COMMON-R053 fatal
+PEPPOL-COMMON-R043 fatal
+PEPPOL-COMMON-R044 warning
+PEPPOL-COMMON-R045 warning
+PEPPOL-COMMON-R046 warning
+PEPPOL-COMMON-R047 warning
+PEPPOL-COMMON-R049 fatal
+PEPPOL-COMMON-R050 fatal
+PEPPOL-COMMON-R054 warning
+PEPPOL-COMMON-R055 warning
+PEPPOL-COMMON-R056-1 warning
+PEPPOL-COMMON-R056-2 warning
+PEPPOL-COMMON-R057 warning
+PEPPOL-T111-B00101 fatal
+PEPPOL-T111-B00102 fatal
+PEPPOL-T111-B00103 fatal
+PEPPOL-T111-B00104 fatal
+PEPPOL-T111-B00105 fatal
+PEPPOL-T111-B00106 fatal
+PEPPOL-T111-B00107 fatal
+PEPPOL-T111-B00108 fatal
+PEPPOL-T111-B00801 fatal
+PEPPOL-T111-B00802 fatal
+PEPPOL-T111-B00901 fatal
+PEPPOL-T111-B00902 fatal
+PEPPOL-T111-B01101 fatal
+PEPPOL-T111-B01201 fatal
+PEPPOL-T111-B01401 fatal
+PEPPOL-T111-B01402 fatal
+PEPPOL-T111-B01601 fatal
+PEPPOL-T111-B00803 fatal
+PEPPOL-T111-B02001 fatal
+PEPPOL-T111-B02002 fatal
+PEPPOL-T111-B02101 fatal
+PEPPOL-T111-B02102 fatal
+PEPPOL-T111-B02301 fatal
+PEPPOL-T111-B02401 fatal
+PEPPOL-T111-B02601 fatal
+PEPPOL-T111-B02602 fatal
+PEPPOL-T111-B02003 fatal
+PEPPOL-T111-B02801 fatal
+PEPPOL-T111-B02802 fatal
+PEPPOL-T111-B02901 fatal
+PEPPOL-T111-B03001 fatal
+PEPPOL-T111-B03301 fatal
+PEPPOL-T111-B03302 fatal
+PEPPOL-T111-B03303 fatal
+PEPPOL-T111-B03601 fatal
+PEPPOL-T111-B03602 fatal
+PEPPOL-T111-B03201 fatal
+PEPPOL-T111-B02902 fatal
+PEPPOL-T111-B03901 fatal
+PEPPOL-T111-B03902 fatal
+PEPPOL-T111-B04201 fatal
+PEPPOL-T111-B03903 fatal
+PEPPOL-T111-B04301 fatal
+PEPPOL-T111-B04401 fatal
+PEPPOL-T111-B04501 fatal
+PEPPOL-T111-B04701 fatal
+PEPPOL-T111-B04302 fatal
+PEPPOL-T111-B04901 fatal
+PEPPOL-T111-B05001 fatal
+PEPPOL-T111-B05101 fatal
+PEPPOL-T111-B05301 fatal
+PEPPOL-T111-B04902 fatal
+PEPPOL-T111-B02803 fatal
+PEPPOL-T111-B00109 fatal
+PEPPOL-T111-R001 fatal
+PEPPOL-T111-R002 warning
+PEPPOL-T111-R003 fatal
+PEPPOL-T111-R004 fatal
+PEPPOL-T111-R005 fatal
+PEPPOL-T111-R008 fatal
+PEPPOL-T111-R006 fatal
+PEPPOL-T111-R007 fatal
+'''.splitlines() if line)
+
+LAYERS = {"en16931": EN16931, "peppol": PEPPOL, "xrechnung": XRECHNUNG,
+          "peppol-response": PEPPOL_RESPONSE}
