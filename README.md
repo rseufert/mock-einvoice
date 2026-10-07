@@ -4,7 +4,7 @@ A mock e-invoicing partner: EN 16931 invoices in and out, with the responses tha
 
 A sibling of [mock-sap](https://github.com/rseufert/mock-sap), [mock-edi](https://github.com/rseufert/mock-edi) and [mock-bank](https://github.com/rseufert/mock-bank), and of [mock-acme](https://github.com/rseufert/mock-acme), the integration between them.
 
-**It is not a mock yet.** What is built reads and writes invoices, and the Peppol Invoice Response that answers one, and holds them to their published rules. It holds invoices to all 979 rules of the EN 16931 core, to Peppol's own 63 and the 31 it has for Germany, and to the 34 of a standard XRechnung document. It has no server and answers nothing. An XRechnung document, and a Peppol document from Germany or from a country Peppol has no national rules for, can be "valid". A Peppol document from Denmark, Greece, Iceland, Italy, the Netherlands, Norway or Sweden is at best "not judged" until those rules are built. [#1](https://github.com/rseufert/mock-einvoice/issues/1) says what the first release is to be; nothing is on PyPI until then.
+**It is half a mock.** What is built reads and writes invoices, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to Peppol's own 63 and the 31 it has for Germany, and to the 34 of a standard XRechnung document. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones. It does not yet send invoices as a supplier, and nothing in it knows what mock-sap has posted or paid. An XRechnung document, and a Peppol document from Germany or from a country Peppol has no national rules for, can be "valid". A Peppol document from Denmark, Greece, Iceland, Italy, the Netherlands, Norway or Sweden is at best "not judged" until those rules are built, and the server does not take it in. [#1](https://github.com/rseufert/mock-einvoice/issues/1) says what the first release is to be; nothing is on PyPI until then.
 
 ## What is built
 
@@ -94,6 +94,81 @@ A response with nothing found wrong is `valid`.
 
 XRechnung has no such message: an XRechnung invoice gets a verdict and nothing after it.
 
+## The server: a buyer
+
+```
+python -m mockeinvoice --port 8100
+```
+
+`8100` is the default (mock-sap is on `8000`, mock-edi on `8080`, mock-bank on `8090`). Installed, the command is `mock-einvoice`. So far the mock is the **buyer**: invoices are sent to it. Sending them is not built.
+
+```
+$ python -m mockeinvoice --clock 2026-10-07T09:00 &
+$ curl -s --data-binary @tests/samples/peppol-invoice.xml http://127.0.0.1:8100/invoices
+{
+  "id": "1",
+  "kind": "Invoice",
+  "number": "GLX-4711",
+  ...
+  "verdict": "valid",
+  "status": "",
+  "findings": [],
+  "responses": [],
+  "document": "/_mock/invoices/1/document"
+}
+$ curl -s -d '{"code": "UQ", "reasons": [{"code": "REF", "text": "No purchase order."}], "actions": ["PIN"]}' \
+    http://127.0.0.1:8100/_mock/invoices/1/responses
+{
+  "id": "1",
+  "invoice": "1",
+  "code": "UQ",
+  ...
+  "document": "/_mock/responses/1"
+}
+$ curl -s http://127.0.0.1:8100/_mock/responses/1      # the Invoice Response, as XML
+```
+
+**What a selling system uses**
+
+| | |
+| --- | --- |
+| `POST /invoices` | A UBL `Invoice` or `CreditNote`. `201` if it is `valid`, and it is held. `422` with the findings if it is `invalid`. `422` naming the rules that were not run if it is `not judged`: the mock does not take in what it could not judge. `400` with the refusal's code for what is not taken at all ([What it refuses](#what-it-refuses)). |
+
+**What a test uses**, under `/_mock`:
+
+| | |
+| --- | --- |
+| `GET /_mock/invoices`, `/_mock/invoices/<id>`, `/_mock/invoices/<id>/document` | what is held; one, with its findings and its responses; and as it was sent |
+| `POST /_mock/invoices/<id>/responses` | the buyer says something of it: `{"code", "reasons", "actions", "note", "force"}`. A reason or an action is a code, or `{"code", "text", "conditions"}` with conditions as pairs of a business term and a value |
+| `GET /_mock/responses/<id>` | an Invoice Response, as XML |
+| `GET /_mock/turned-away` | what was not taken in, and why |
+| `POST /_mock/validate` | an invoice, a credit note or an Invoice Response held to its rules, and not kept |
+| `GET`, `PATCH /_mock/buyer` | how the buyer behaves: `{"answers": ...}` |
+| `POST /_mock/reset` | forget every document and response |
+
+**Responses go to the seller.** Peppol's guide has the Invoice Response pushed from buyer to seller, and a seller cannot ask for one. `--seller-url URL` is where each is `POST`ed, and what became of that is on the response (`"delivery"`). Without it, responses are written and kept.
+
+**When the buyer speaks unasked** (`--answers`, or `PATCH /_mock/buyer`):
+
+- `required`, the default. An invoice sent under Peppol's Billing with Response (billing's profile `02`), where Peppol makes the response "a required step", is acknowledged (`AB`) on receipt. Under profile `01` nothing is said until it is asked for.
+- `always`: every Peppol document is acknowledged.
+- `never`: the buyer who owes a response and sends none.
+
+Nothing else happens by itself. Each later status is asked for with `POST /_mock/invoices/<id>/responses`.
+
+**The order responses come in.** Peppol's guide to the Invoice Response has [process rules](https://docs.peppol.eu/poacc/upgrade-3/profiles/63-invoiceresponse/#invoice-response-process-rules) that are in none of its Schematron files, so no validator checks them. The buyer keeps to them, and a response that would break one is `409` with the rule's identifier:
+
+| Rule | In our words |
+| --- | --- |
+| `OP-BR111-R012` | A status does not go back in the order `AB`, `IP`, `UQ`, `CA`, `RE`, `AP`, `PD`. Any may be first and any left out. Only under query and a part payment (`PD` with the reason `PPD`) come twice. |
+| `OP-BR111-R004` | Nothing follows a rejection or a payment in full. |
+| `OP-BR111-R005` | Only paid follows accepted. |
+| `OP-BR111-R014` | The type code is the answered document's own. The mock writes it so; there is nothing to ask for. |
+
+`"force": true` sends a response out of order all the same, and marks it `"forced"`: a seller's system has to cope with a buyer who does. Every response is held to the 82 published rules before it goes, and one that fails (a rejection with no reason) is `422` with the finding, forced or not. Its warnings go with it.
+
+An **XRechnung** document gets its verdict and no response. Asking for one is `409`.
+
 ## What it refuses
 
 `read` raises `Refused`, with a `code` and a sentence naming what was sent, for:
@@ -128,6 +203,12 @@ A group with nothing in it is still there: an empty `TaxSubtotal` is a VAT break
 
 ## Known to be wrong, or not real
 
+- **No transport.** A real Peppol invoice goes by AS4, signed and encrypted, between access points that find each other by SMP lookup. Here it is a `POST`, and the seller is a URL. The paths and status codes are this mock's own; nothing published defines an HTTP interface for any of it.
+- **An invalid document is turned away at the door and gets no Invoice Response.** On the real network the sender's access point validates before it sends, and Peppol's guide puts the status of a transmission outside what an Invoice Response is for. That this is how a failed validation should look from the seller's side is this project's reading and not a published rule.
+- **Nothing happens with time.** A real buyer moves an invoice to in process, accepted and paid over days, and Peppol asks for a first response within three working days. Here each status after the first is asked for.
+- **A duplicate is taken like the first.** A second document with a seller and a number already held is held too. A real buyer's system would likely reject it; with which status and reason is not known here, and is not guessed.
+- **Any buyer an invoice names is this mock.** No document is turned away because its buyer is unknown.
+- **Nothing is kept on disk.** Documents and responses are gone when the server stops.
 - **No XML Schema validation.** The published validators check the UBL schema before any rule. The standard library cannot, so this reads what it understands and reports what it did not. A document that is not schema-valid is not refused for that.
 - **The writer does not promise the same bytes.** Reading what was written gives an equal document. The order among repeats of different kinds (allowances and charges, say), the namespace prefixes, white space, comments and anything `UNHELD` are not kept.
 - **The writer does not supply what UBL requires and the model lacks.** A credit note with a due date and no payment instruction is written with a `PaymentMeans` that holds only the date, because that is where the binding puts the date. The UBL schema does not allow it, and read back, the document has an empty payment instruction it did not have before.
@@ -206,5 +287,7 @@ python -m unittest
 ```
 
 Python 3.8 or later, and nothing to install.
+
+The tests start the server on a port the operating system chooses, and a stand-in seller beside it.
 
 `tools/published_rules.py` regenerates `mockeinvoice/rules/published.py` from the three Schematron files when a pin moves. It takes each rule's identifier and flag and nothing else. The repository's settings are described in [docs/GITHUB.md](docs/GITHUB.md).

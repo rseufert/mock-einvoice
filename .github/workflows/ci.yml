@@ -72,6 +72,8 @@ jobs:
           /tmp/wheel/bin/pip install dist/*.whl
           cd /tmp
           /tmp/wheel/bin/python -c "import mockeinvoice, mockeinvoice.ubl, mockeinvoice.specification, mockeinvoice.rules.en16931, mockeinvoice.rules.codelists, mockeinvoice.rules.ublsyntax; print(mockeinvoice.__version__, len(mockeinvoice.rules.REGISTRY['en16931']))"
+          /tmp/wheel/bin/mock-einvoice --version
+          /tmp/wheel/bin/python -m mockeinvoice --help > /dev/null
           test "$(/tmp/wheel/bin/pip list --format=freeze | grep -vicE '^(pip|setuptools|wheel|mock-einvoice)==')" = "0"
       # `publish.yml` refuses a release where these disagree. Asked here as
       # well, so that the day it is wrong is not the day of a release.

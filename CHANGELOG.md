@@ -10,10 +10,25 @@ says so where it does.
 
 Nothing is released yet. What is here reads and writes invoices and holds them
 to every rule of the EN 16931 core, to Peppol's own rules and its rules for
-Germany, and to XRechnung's.
+Germany, and to XRechnung's; and over HTTP it is a buyer that takes them in
+and answers.
 
 ### Added
 
+- **The server, as a buyer** ([#25]): `mock-einvoice --port 8100`, or
+  `python -m mockeinvoice`. `POST /invoices` takes a UBL invoice or credit
+  note in if it is `valid`, and turns it away with its findings if it is
+  `invalid`, or with the rules that were not run if it is `not judged`. The
+  buyer answers Peppol documents with Invoice Responses, each held to its 82
+  rules before it goes and `POST`ed to `--seller-url`: an acknowledgement on
+  receipt where billing's profile makes a response a required step, and
+  whatever a test asks for after that (`POST /_mock/invoices/<id>/responses`).
+  It keeps to the process rules of Peppol's guide, which no Schematron file
+  has (`OP-BR111-R004`, `-R005`, `-R012`, `-R014`), and `"force"` sends a
+  response out of order for a seller's system to cope with. `/_mock` has what
+  is held, what was turned away, a validator that keeps nothing, and a reset.
+  Nothing happens with time, a duplicate is taken like the first, and nothing
+  is kept on disk.
 - **The Peppol Invoice Response** ([#23]): what a buyer answers an invoice
   with. A model, a reader and a writer for the UBL `ApplicationResponse`
   (`read_response`, `write_response`, `validate_response`), and all 82 of its
@@ -166,3 +181,4 @@ Germany, and to XRechnung's.
 [#17]: https://github.com/rseufert/mock-einvoice/issues/17
 [#19]: https://github.com/rseufert/mock-einvoice/issues/19
 [#23]: https://github.com/rseufert/mock-einvoice/issues/23
+[#25]: https://github.com/rseufert/mock-einvoice/issues/25

@@ -32,6 +32,9 @@ classifiers = [
 # The standard library and nothing else, to run and to test.
 dependencies = []
 
+[project.scripts]
+mock-einvoice = "mockeinvoice.server:main"
+
 [project.urls]
 Repository = "https://github.com/rseufert/mock-einvoice"
 Issues = "https://github.com/rseufert/mock-einvoice/issues"
