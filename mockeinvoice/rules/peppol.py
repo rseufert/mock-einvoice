@@ -597,8 +597,11 @@ def identifiers(root: At, scheme: str) -> List[At]:
 
 
 def by_scheme(scheme: str, short: str, about: str, test: Callable[[str], bool],
-              trimmed: bool) -> None:
-    @peppol("PEPPOL-COMMON-%s" % short, "%s (scheme %s)" % (about, scheme))
+              trimmed: bool, register: Callable = peppol) -> None:
+    """A rule on an identifier by its scheme. Peppol asks these of every one
+    of its documents, an invoice or a response to one, so `register` says
+    which layer's rule this is."""
+    @register("PEPPOL-COMMON-%s" % short, "%s (scheme %s)" % (about, scheme))
     def check(root: At) -> Iterator[Failure]:
         for at in identifiers(root, scheme):
             if not test(normalize_space(at.text) if trimmed else at.text):
@@ -609,18 +612,14 @@ for _scheme in SCHEMES:
     by_scheme(*_scheme)
 
 
-@peppol("PEPPOL-COMMON-R046", "an electronic address under scheme 9907 is an Italian tax "
-                              "code: sixteen characters of the right kinds, or eleven digits")
-def common_r046(root: At) -> Iterator[Failure]:
+def italian_address(root: At) -> Iterator[Failure]:
     for at in named(root, "cbc:EndpointID"):
         if (at.node.attributes.get("schemeID") == "9907"
                 and not codice_fiscale(normalize_space(at.text))):
             yield at.path, "%r is not" % at.text
 
 
-@peppol("PEPPOL-COMMON-R056-2", "a VAT identifier that starts `NL` is `NL`, nine digits, `B` "
-                                "and two digits")
-def common_r056_2(root: At) -> Iterator[Failure]:
+def dutch_vat(root: At) -> Iterator[Failure]:
     for at in named(root, "cbc:CompanyID"):
         if at.parent is None or at.parent.node.tag != PARTY_TAX_SCHEME:
             continue
@@ -633,6 +632,18 @@ def common_r056_2(root: At) -> Iterator[Failure]:
         value = normalize_space(at.text)
         if value.startswith("NL") and not re.fullmatch(r"NL[0-9]{9}B[0-9]{2}", value):
             yield at.path, "%r is not" % at.text
+
+
+# Two more by scheme, which like the fifteen above are asked of a response too.
+OTHERS = (
+    ("PEPPOL-COMMON-R046", "an electronic address under scheme 9907 is an Italian tax code: "
+                           "sixteen characters of the right kinds, or eleven digits",
+     italian_address),
+    ("PEPPOL-COMMON-R056-2", "a VAT identifier that starts `NL` is `NL`, nine digits, `B` and "
+                             "two digits", dutch_vat),
+)
+for _identifier, _about, _check in OTHERS:
+    peppol(_identifier, _about)(_check)
 
 
 # -- code lists, type codes, dates -----------------------------------------------------------

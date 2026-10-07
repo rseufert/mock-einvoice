@@ -70,7 +70,8 @@ class TheEngine(unittest.TestCase):
 
     def test_the_published_lists_are_the_sizes_the_sources_have(self):
         self.assertEqual({layer: len(found) for layer, found in published.LAYERS.items()},
-                         {"en16931": 979, "peppol": 165, "xrechnung": 56})
+                         {"en16931": 979, "peppol": 165, "xrechnung": 56,
+                          "peppol-response": 82})
         # A rule that is commented out in its source is not published, and
         # one whose test has a `>` in it is.
         self.assertNotIn("PEPPOL-COMMON-R048", published.PEPPOL)

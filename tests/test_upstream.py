@@ -182,6 +182,11 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
             self.assertTrue(path.endswith(".xml") or path == "rules/sch/PEPPOL-EN16931-UBL.sch")
         # The hash is git's for a blob, so a file can be checked against the list.
         self.assertEqual(tool.blob_hash(b"hello\n"), "ce013625030ba8dba906f756967f9e9ca394464a")
+        # And the Invoice Response's, from Peppol's other repository.
+        _name, repository, commit, files, _target = tool.SETS[1]
+        self.assertEqual(repository, "OpenPEPPOL/poacc-upgrade-3")
+        self.assertIn(commit, published.SOURCES["peppol-response"][1])
+        self.assertEqual(len(list(tool.listed(files))), 27)
         self.assertIn(tool.COMMIT, published.SOURCES["peppol"][1])
 
 

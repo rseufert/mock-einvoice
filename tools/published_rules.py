@@ -1,8 +1,8 @@
 """Write `mockeinvoice/rules/published.py` from the published Schematron files.
 
-    python tools/published_rules.py EN16931.sch PEPPOL.sch XRECHNUNG.sch
+    python tools/published_rules.py EN16931.sch PEPPOL.sch XRECHNUNG.sch T111.sch
 
-The three files are not in this repository. They are, at the versions the
+The four files are not in this repository. They are, at the versions the
 README pins:
 
     EN 16931   ConnectingEurope/eInvoicing-EN16931, tag validation-1.3.16,
@@ -11,6 +11,13 @@ README pins:
                rules/sch/PEPPOL-EN16931-UBL.sch
     XRechnung  itplr-kosit/xrechnung-schematron, tag v2.6.0,
                src/validation/schematron/ubl/XRechnung-UBL-validation.sch
+
+    Response   Peppol's Invoice Response, 3.0.17: schematron/PEPPOLBIS-T111.sch
+               in https://docs.peppol.eu/poacc/upgrade-3/files/
+               PEPPOLBIS-Upgrade-Schematron.zip. The published file and not the
+               repository's, because 54 of its rules are generated when Peppol
+               builds it and are in no file of the repository. The rest are
+               at commit ad6828c of OpenPEPPOL/poacc-upgrade-3.
 
 What is taken from them is each rule's identifier and its flag, and nothing
 else: no rule's wording and no rule's test.
@@ -38,6 +45,9 @@ SOURCES = {
     "xrechnung": ("XRechnung Schematron 2.6.0",
                   "https://github.com/itplr-kosit/xrechnung-schematron/blob/v2.6.0/"
                   "src/validation/schematron/ubl/XRechnung-UBL-validation.sch"),
+    "peppol-response": ("Peppol Invoice Response 3.0.17",
+                        "https://github.com/OpenPEPPOL/poacc-upgrade-3/blob/"
+                        "ad6828c94f8090bdfd620df4e48b213977afa2cb/rules/sch/PEPPOLBIS-T111.sch"),
 }
 
 '''
@@ -57,15 +67,16 @@ def rules(path):
 
 
 def main(arguments):
-    if len(arguments) != 3:
+    if len(arguments) != 4:
         sys.exit(__doc__)
     out = [HEAD]
-    for layer, path in zip(("en16931", "peppol", "xrechnung"), arguments):
+    for layer, path in zip(("en16931", "peppol", "xrechnung", "peppol_response"), arguments):
         found = rules(path)
         out.append("%s = dict(line.split() for line in '''\n" % layer.upper())
         out.extend("%s %s\n" % pair for pair in found.items())
         out.append("'''.splitlines() if line)\n\n")
-    out.append('LAYERS = {"en16931": EN16931, "peppol": PEPPOL, "xrechnung": XRECHNUNG}\n')
+    out.append('LAYERS = {"en16931": EN16931, "peppol": PEPPOL, "xrechnung": XRECHNUNG,\n'
+               '          "peppol-response": PEPPOL_RESPONSE}\n')
     with open("mockeinvoice/rules/published.py", "w", encoding="utf-8") as handle:
         handle.write("".join(out))
 
