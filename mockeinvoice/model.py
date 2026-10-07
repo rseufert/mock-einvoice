@@ -441,7 +441,15 @@ def implied(term: str) -> tuple:
     return tuple(found)
 
 
-TERMS_IMPLYING: Dict[str, List[str]] = {}
+# Two references that are no group of the standard's and are told from the
+# supporting documents (BG-24) by their type code: the invoiced object, and
+# on a credit note the project. Named so that one written with no identifier
+# in it is still known to have been there (`Group.has`), which a rule asks.
+INVOICED_OBJECT_REFERENCE = "ubl:InvoicedObjectReference"
+PROJECT_REFERENCE = "ubl:ProjectReference"
+
+TERMS_IMPLYING: Dict[str, List[str]] = {INVOICED_OBJECT_REFERENCE: ["BT-18"],
+                                        PROJECT_REFERENCE: ["BT-11"]}
 for _term in TERMS:
     for _group in implied(_term):
         TERMS_IMPLYING.setdefault(_group, []).append(_term)

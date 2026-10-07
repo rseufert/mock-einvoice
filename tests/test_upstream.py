@@ -33,10 +33,10 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertEqual(disagreements, [])
         self.assertEqual(dict(counts), {
             "files": 278, "cases": 1137, "expectations": 1139,
-            "agree": 148,           # every case for a rule that is built
-            "not built": 979,       # compared with nothing, and not counted as agreeing
+            "agree": 460,           # every case for a rule that is built
+            "not built": 667,       # compared with nothing, and not counted as agreeing
             "unpublished": 12})     # BR-CO-25, which the pinned rule file does not have
-        self.assertEqual(len(not_built), 181)
+        self.assertEqual(len(not_built), 123)
         self.assertTrue(set(not_built).isdisjoint(REGISTRY["en16931"]))
         self.assertLessEqual(set(not_built), set(published.EN16931))
 
@@ -46,9 +46,10 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
             for _number, expectations, _data in upstream.cases(path):
                 named.update(identifier for _kind, identifier in expectations)
         compared = named & set(REGISTRY["en16931"])
-        # The publisher has cases for 19 of the 23 calculation rules built.
-        self.assertEqual(len(compared), 19)
-        self.assertTrue(all(i.startswith("BR-CO-") for i in compared))
+        # The publisher has cases for 19 of the 23 calculation rules built,
+        # and for every one of the 58 plain business rules.
+        self.assertEqual(len(compared), 19 + 58)
+        self.assertEqual(sum(1 for i in compared if i.startswith("BR-CO-")), 19)
         # No cases are published for the four that cannot fail, nor for any
         # of the decimals rules: those rest on this project's own tests.
         self.assertEqual(sorted(set(REGISTRY["en16931"]) - named), sorted(
@@ -76,7 +77,7 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertTrue(always and all(d[2] == "success" and d[4] == "fatal"
                                        for d in always), always)
         self.assertEqual(len(disagreements), len(silenced) + len(always))
-        self.assertEqual(counts["agree"] + counts["disagree"], 148)
+        self.assertEqual(counts["agree"] + counts["disagree"], 460)
         self.assertEqual({d[0] for d in silenced}, {"Invoice-unit-UBL/BR-CO-10.xml"})
         self.assertEqual(upstream.tally("en16931")[1], [])       # and whole again, none
 

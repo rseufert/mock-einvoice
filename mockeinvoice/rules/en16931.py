@@ -1,7 +1,8 @@
 """The EN 16931 core: the rules every document is held to.
 
-Built so far: the calculation rules (`BR-CO-*`) and the rules on how many
-decimals an amount carries (`BR-DEC-*`). Read `rules/__init__.py` first.
+Built so far: the rules on what a document must have in it (`BR-01` to
+`BR-65`), the calculation rules (`BR-CO-*`) and the rules on how many decimals
+an amount carries (`BR-DEC-*`). Read `rules/__init__.py` first.
 
 Each function is its rule's published test, restated against the model. The
 tests are XPath over UBL, and where the model is further from UBL than the
@@ -18,7 +19,21 @@ Where this departs from the published tests
   reader has already reported the repeat.
 - **Two totals elements.** The tests on the document totals run once for each
   `LegalMonetaryTotal`. The model holds one set of totals, so with two the
-  amounts are repeats, and the first point applies.
+  amounts are repeats, and the first point applies. The same goes for every
+  element the standard has once and the model holds as one: two seller
+  addresses are one address here, with what was in both.
+- **A tax category with no tax scheme.** `BR-32`, `BR-37`, `BR-47` and `BR-48`
+  look for a category whose scheme is VAT, and a category that names no scheme
+  at all is not one. The model does not hold whether a scheme was named, so
+  here such a category counts. UBL's schema requires the scheme.
+- **What is not held is not asked.** A rule whose context is an element
+  wherever it occurs (`BR-52` on any `AdditionalDocumentReference`, `BR-53` on
+  any `TaxTotal`) is asked here of the places the standard has for it. One on
+  a line, say, the reader has already reported as not held.
+- **A charge indicator that is neither.** The allowance and charge rules pick
+  their elements by comparing `ChargeIndicator` with a boolean, which is an
+  XPath error on text that is not one. The reader does not hold such an
+  element, and says so; no rule is asked of it.
 
 Rules that cannot fail
 ----------------------
@@ -33,10 +48,12 @@ from __future__ import annotations
 import functools
 from typing import Iterator, List, Tuple
 
-from ..model import PARTY_ROLE, Document, Group
+from ..model import (INVOICED_OBJECT_REFERENCE, PARTY_ROLE, PROJECT_REFERENCE, Document, Group,
+                     Value)
 from . import Failure, rule
-from .calculation import (Incomputable, cents, decimals_after_point, equal, minus, numbered,
-                          one, plus, shown, total, xpath_round)
+from .calculation import (Incomputable, cents, decimals_after_point, doubles, equal, minus,
+                          normalize_space, numbered, one, plus, said, shown, total, xpath_round,
+                          xs_date)
 
 en16931 = functools.partial(rule, "en16931")
 
@@ -66,6 +83,305 @@ def within(document: Document, line_group: str) -> Iterator[Tuple[str, Group]]:
     for path, line in lines(document):
         for inner, group in numbered(line.all(line_group), line_group):
             yield "%s/%s" % (path, inner), group
+
+
+# -- BR: what a document must have in it -------------------------------------
+#
+# The published tests ask one of two things of an element and the difference
+# matters: that it has something in it (`normalize-space(cbc:X) != ''`), or
+# only that it is there (`exists(cbc:X)`), which an empty element is. `named`
+# is the first and `given` the second.
+
+Where = Tuple[str, Group]
+
+
+def whole(document: Document) -> List[Where]:
+    return [("", document)]
+
+
+def if_there(group: str):
+    """The document, if it has a group that occurs once: the rule's context
+    is that group's element."""
+    return lambda document: [(group, document)] if document.has(group) else []
+
+
+def each(group: str):
+    return lambda document: list(numbered(document.all(group), group))
+
+
+def each_in_lines(group: str):
+    return lambda document: list(within(document, group))
+
+
+def lines_with(group: str):
+    return lambda document: [("%s/%s" % (path, group), line)
+                             for path, line in lines(document) if line.has(group)]
+
+
+def named(identifier: str, about: str, term: str, where=whole) -> None:
+    @en16931(identifier, about)
+    def check(document: Document) -> Iterator[Failure]:
+        for path, group in where(document):
+            if said(group, term) == "":
+                yield path or term, ("it is there with nothing in it" if group.values(term)
+                                     else "it is not there")
+
+
+def given(identifier: str, about: str, *terms: str, where=whole) -> None:
+    """One of the terms is there, though it may be empty."""
+    @en16931(identifier, about)
+    def check(document: Document) -> Iterator[Failure]:
+        for path, group in where(document):
+            if not any(group.values(term) for term in terms):
+                yield path or terms[0], "it is not there"
+
+
+def qualified(identifier: str, about: str, term: str, attribute: str, where=whole) -> None:
+    """Every value of a term has an attribute beside it."""
+    @en16931(identifier, about)
+    def check(document: Document) -> Iterator[Failure]:
+        for path, group in where(document):
+            for value in group.values(term):
+                if attribute not in value.attributes:
+                    yield "/".join(part for part in (path, term) if part), (
+                        "%r has none" % value.text)
+
+
+named("BR-01", "the document names its specification (BT-24)", "BT-24")
+named("BR-02", "the document has a number (BT-1)", "BT-1")
+named("BR-03", "the document has an issue date (BT-2)", "BT-2")
+named("BR-04", "the document has a type code (BT-3)", "BT-3")
+named("BR-05", "the document has a currency code (BT-5)", "BT-5")
+named("BR-06", "the seller has a name (BT-27)", "BT-27")
+named("BR-07", "the buyer has a name (BT-44)", "BT-44")
+
+
+def has_group(identifier: str, about: str, group: str, where=whole) -> None:
+    @en16931(identifier, about)
+    def check(document: Document) -> Iterator[Failure]:
+        for path, holder in where(document):
+            if not holder.has(group):
+                yield path or group, "it is not there"
+
+
+has_group("BR-08", "the seller has a postal address (BG-5)", "BG-5")
+named("BR-09", "the seller's postal address has a country code (BT-40)", "BT-40",
+      if_there("BG-5"))
+has_group("BR-10", "the buyer has a postal address (BG-8)", "BG-8")
+named("BR-11", "the buyer's postal address has a country code (BT-55)", "BT-55",
+      if_there("BG-8"))
+given("BR-12", "the document totals have the sum of line net amounts (BT-106)", "BT-106",
+      where=if_there("BG-22"))
+given("BR-13", "the document totals have the total without VAT (BT-109)", "BT-109",
+      where=if_there("BG-22"))
+given("BR-14", "the document totals have the total with VAT (BT-112)", "BT-112",
+      where=if_there("BG-22"))
+given("BR-15", "the document totals have the amount due (BT-115)", "BT-115",
+      where=if_there("BG-22"))
+has_group("BR-16", "the document has at least one line (BG-25)", "BG-25")
+
+
+@en16931("BR-17", "a payee (BG-10) has a name (BT-59), and is not the seller: neither its "
+                  "name nor any identifier of its is one of the seller's")
+def br_17(document: Document) -> Iterator[Failure]:
+    if not document.has("BG-10"):
+        return
+    # The seller's name here is its trading name (BT-28), which is the
+    # element the published test compares with, and not BT-27.
+    def texts(values: List[Value]) -> List[str]:
+        return [value.text for value in values]
+
+    def identifiers(term: str, payee: bool) -> List[str]:
+        return texts(document.values(term)) + [
+            value.text for value in document.values("BT-90")
+            if (value.attributes.get(PARTY_ROLE) == "payee") == payee]
+
+    names = texts(document.values("BT-59"))
+    if not names:
+        yield "BT-59", "it has no name"
+        return
+    for name in names:
+        if name in texts(document.values("BT-28")):
+            yield "BT-59", "its name, %r, is the seller's trading name (BT-28)" % name
+            return
+    for identifier in identifiers("BT-60", True):
+        if identifier in identifiers("BT-29", False):
+            yield "BT-60", "its identifier %r is one of the seller's" % identifier
+            return
+
+
+named("BR-18", "a seller's tax representative (BG-11) has a name (BT-62)", "BT-62",
+      if_there("BG-11"))
+has_group("BR-19", "a seller's tax representative (BG-11) has a postal address (BG-12)",
+          "BG-12", if_there("BG-11"))
+named("BR-20", "a tax representative's postal address has a country code (BT-69)", "BT-69",
+      if_there("BG-12"))
+named("BR-21", "each line has an identifier (BT-126)", "BT-126", each("BG-25"))
+given("BR-22", "each line has a quantity (BT-129)", "BT-129", where=each("BG-25"))
+given("BR-23", "each line's quantity has a unit of measure (BT-130)", "BT-130",
+      where=each("BG-25"))
+given("BR-24", "each line has a net amount (BT-131)", "BT-131", where=each("BG-25"))
+named("BR-25", "each line's item has a name (BT-153)", "BT-153", each("BG-25"))
+given("BR-26", "each line has a net price (BT-146)", "BT-146", where=each("BG-25"))
+
+
+@en16931("BR-27", "a line's net price (BT-146) is not negative")
+def br_27(document: Document) -> Iterator[Failure]:
+    for path, line in lines(document):
+        prices = doubles(line, "BT-146")
+        # A price that is not there is not "not negative": compared with an
+        # empty sequence, nothing is. So this fails beside BR-26.
+        if not any(price is not None and price >= 0 for price in prices):
+            yield path, ("the price is %s" % line.text("BT-146") if prices
+                         else "there is no price")
+
+
+@en16931("BR-28", "a line's gross price (BT-148) is not negative")
+def br_28(document: Document) -> Iterator[Failure]:
+    for path, line in lines(document):
+        prices = doubles(line, "BT-148")
+        if prices and not any(price is not None and price >= 0 for price in prices):
+            yield path, "the gross price is %s" % line.text("BT-148")
+
+
+def ends_after_it_starts(identifier: str, name: str, where, start: str, end: str) -> None:
+    @en16931(identifier, "%s does not end (%s) before it starts (%s)" % (name, end, start))
+    def check(document: Document) -> Iterator[Failure]:
+        for path, group in where(document):
+            if not group.values(start) or not group.values(end):
+                continue
+            if not xs_date(group, end) >= xs_date(group, start):
+                yield path, "it runs from %s to %s" % (group.text(start), group.text(end))
+
+
+ends_after_it_starts("BR-29", "the invoicing period (BG-14)", if_there("BG-14"),
+                     "BT-73", "BT-74")
+ends_after_it_starts("BR-30", "a line's period (BG-26)", lines_with("BG-26"),
+                     "BT-134", "BT-135")
+
+given("BR-31", "a document level allowance has an amount (BT-92)", "BT-92",
+      where=each("BG-20"))
+given("BR-32", "a document level allowance has a VAT category code (BT-95)", "BT-95",
+      where=each("BG-20"))
+given("BR-33", "a document level allowance has a reason (BT-97) or a reason code (BT-98)",
+      "BT-97", "BT-98", where=each("BG-20"))
+given("BR-36", "a document level charge has an amount (BT-99)", "BT-99", where=each("BG-21"))
+given("BR-37", "a document level charge has a VAT category code (BT-102)", "BT-102",
+      where=each("BG-21"))
+given("BR-38", "a document level charge has a reason (BT-104) or a reason code (BT-105)",
+      "BT-104", "BT-105", where=each("BG-21"))
+given("BR-41", "a line allowance has an amount (BT-136)", "BT-136",
+      where=each_in_lines("BG-27"))
+given("BR-42", "a line allowance has a reason (BT-139) or a reason code (BT-140)",
+      "BT-139", "BT-140", where=each_in_lines("BG-27"))
+given("BR-43", "a line charge has an amount (BT-141)", "BT-141", where=each_in_lines("BG-28"))
+given("BR-44", "a line charge has a reason (BT-144) or a reason code (BT-145)",
+      "BT-144", "BT-145", where=each_in_lines("BG-28"))
+given("BR-45", "a VAT breakdown has a taxable amount (BT-116)", "BT-116", where=each("BG-23"))
+given("BR-46", "a VAT breakdown has a tax amount (BT-117)", "BT-117", where=each("BG-23"))
+given("BR-47", "a VAT breakdown has a VAT category code (BT-118)", "BT-118",
+      where=each("BG-23"))
+
+
+@en16931("BR-48", "a VAT breakdown has a rate (BT-119), unless its category (BT-118) is O, "
+                  "not subject to VAT")
+def br_48(document: Document) -> Iterator[Failure]:
+    for path, breakdown in numbered(document.all("BG-23"), "BG-23"):
+        if not breakdown.values("BT-119") and not any(
+                normalize_space(code.text) == "O" for code in breakdown.values("BT-118")):
+            yield path, "it has none, and its category is %r" % breakdown.text("BT-118")
+
+
+given("BR-49", "a payment instruction has a payment means code (BT-81)", "BT-81",
+      where=each("BG-16"))
+
+TRANSFERS = ("30", "58")        # credit transfer, and SEPA credit transfer
+
+
+@en16931("BR-50", "the account of a payment by credit transfer has an identifier (BT-84)")
+def br_50(document: Document) -> Iterator[Failure]:
+    for path, payment in numbered(document.all("BG-16"), "BG-16"):
+        # The code is compared here as it is written, spaces and all, which
+        # is not how BR-61 compares it.
+        if (payment.has("BG-17") and any(code.text in TRANSFERS
+                                         for code in payment.values("BT-81"))
+                and said(payment, "BT-84") == ""):
+            yield path, "it has none"
+
+
+@en16931("BR-51", "no more than the last digits of a payment card's number (BT-87) are given")
+def br_51(document: Document) -> Iterator[Failure]:
+    for path, payment in numbered(document.all("BG-16"), "BG-16"):
+        for number in payment.values("BT-87"):
+            if len(normalize_space(number.text)) > 10:
+                yield path, "%d characters are given" % len(normalize_space(number.text))
+
+
+@en16931("BR-52", "a supporting document (BG-24), and any other additional document "
+                  "reference, has an identifier (BT-122)")
+def br_52(document: Document) -> Iterator[Failure]:
+    for path, reference in numbered(document.all("BG-24"), "BG-24"):
+        if said(reference, "BT-122") == "":
+            yield path, "it has none"
+    # The same element with a type code is the invoiced object (BT-18) or, on
+    # a credit note, the project (BT-11), and the rule is asked of those too.
+    typed = [(INVOICED_OBJECT_REFERENCE, "BT-18")]
+    if document.kind == "CreditNote":
+        typed.append((PROJECT_REFERENCE, "BT-11"))
+    for reference, term in typed:
+        if document.has(reference) and said(document, term) == "":
+            yield term, "the reference is there and it has none"
+
+
+@en16931("BR-53", "if a VAT accounting currency (BT-6) is named, there is a total VAT amount "
+                  "in it (BT-111)")
+def br_53(document: Document) -> Iterator[Failure]:
+    amounts = document.values("BT-110") + document.values("BT-111")
+    for currency in document.values("BT-6"):
+        if not any(amount.attributes.get("currencyID") == currency.text for amount in amounts):
+            yield "BT-111", "no total VAT amount is in %r" % currency.text
+
+
+@en16931("BR-54", "an item attribute (BG-32) has a name (BT-160) and a value (BT-161)")
+def br_54(document: Document) -> Iterator[Failure]:
+    for path, attribute in within(document, "BG-32"):
+        missing = [term for term in ("BT-160", "BT-161") if not attribute.values(term)]
+        if missing:
+            yield path, "it has no %s" % " or ".join(missing)
+
+
+given("BR-55", "a preceding invoice reference (BG-3) has the invoice's number (BT-25)",
+      "BT-25", where=each("BG-3"))
+
+
+@en16931("BR-56", "a seller's tax representative (BG-11) has a VAT identifier (BT-63)")
+def br_56(document: Document) -> Iterator[Failure]:
+    if document.has("BG-11") and not any(
+            value.attributes.get("TaxScheme/ID", "VAT").strip().upper() == "VAT"
+            for value in document.values("BT-63")):
+        yield "BT-63", "it has none"
+
+
+given("BR-57", "a deliver to address (BG-15) has a country code (BT-80)", "BT-80",
+      where=if_there("BG-15"))
+
+
+@en16931("BR-61", "a payment by credit transfer (BT-81 is 30 or 58) has the account's "
+                  "identifier (BT-84)")
+def br_61(document: Document) -> Iterator[Failure]:
+    for path, payment in numbered(document.all("BG-16"), "BG-16"):
+        if said(payment, "BT-81") in TRANSFERS and not payment.values("BT-84"):
+            yield path, "it has none"
+
+
+qualified("BR-62", "the seller's electronic address (BT-34) names its scheme", "BT-34",
+          "schemeID")
+qualified("BR-63", "the buyer's electronic address (BT-49) names its scheme", "BT-49",
+          "schemeID")
+qualified("BR-64", "an item's standard identifier (BT-157) names its scheme", "BT-157",
+          "schemeID", each("BG-25"))
+qualified("BR-65", "an item's classification (BT-158) names its scheme", "BT-158", "listID",
+          each("BG-25"))
 
 
 # -- BR-CO: the calculations -------------------------------------------------

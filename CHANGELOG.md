@@ -13,6 +13,14 @@ to the first of the published rules.
 
 ### Added
 
+- **The plain business rules of the EN 16931 core** ([#8]): `BR-01` to
+  `BR-65`, 58 rules on what a document must have in it, which makes 102 built.
+  Each asks what its published test asks: some that an element has something
+  in it, some only that it is there, which an empty element is. All 312 of
+  the publisher's unit test cases for them agree. A reference told by its
+  type code (the invoiced object, a credit note's project) that is written
+  with no identifier is now held as having been there, so `BR-52` can ask it
+  and the writer no longer drops it.
 - **A rule engine, and the first 44 rules of the EN 16931 core** ([#3]): the
   calculation rules (`BR-CO-*`) and the rules on how many decimals an amount
   carries (`BR-DEC-*`). A rule is one function under its published identifier.
@@ -28,7 +36,7 @@ to the first of the published rules.
   specification is unbuilt.
 - **The rules held to their publishers' own unit tests** ([#4]). The EN 16931
   unit tests are in the repository, under their own licence, and are a test:
-  1,137 cases, of which the 148 for rules that are built all agree. A case
+  1,137 cases, of which those for rules that are built all agree. A case
   for a rule that is not built is compared with nothing and never counted as
   agreeing, and `python -m tests.upstream` prints the counts.
 - **The XRechnung test suite's UBL documents** ([#4]), under their own
@@ -74,3 +82,4 @@ to the first of the published rules.
 [#2]: https://github.com/rseufert/mock-einvoice/issues/2
 [#3]: https://github.com/rseufert/mock-einvoice/issues/3
 [#4]: https://github.com/rseufert/mock-einvoice/issues/4
+[#8]: https://github.com/rseufert/mock-einvoice/issues/8
