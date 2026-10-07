@@ -48,11 +48,13 @@ class TheEngine(unittest.TestCase):
         for layer, built in REGISTRY.items():
             self.assertLessEqual(set(built), set(published.LAYERS[layer]), layer)
 
-    def test_three_families_of_the_core_are_built_and_nothing_else_is_yet(self):
+    def test_four_families_of_the_core_are_built_and_nothing_else_is_yet(self):
+        vat = ("BR-S-", "BR-Z-", "BR-E-", "BR-AE-", "BR-IC-", "BR-G-", "BR-O-", "BR-AF-",
+               "BR-AG-", "BR-B-")
         expected = {i for i in published.EN16931
-                    if i.startswith(("BR-CO-", "BR-DEC-")) or i[3:].isdigit()}
+                    if i.startswith(("BR-CO-", "BR-DEC-") + vat) or i[3:].isdigit()}
         self.assertEqual(set(REGISTRY["en16931"]), expected)
-        self.assertEqual(len(expected), 44 + 58)
+        self.assertEqual(len(expected), 44 + 58 + 98)
         self.assertEqual((REGISTRY["peppol"], REGISTRY["xrechnung"]), ({}, {}))
 
     def test_the_published_lists_are_the_sizes_the_sources_have(self):
@@ -97,12 +99,12 @@ class TheReport(unittest.TestCase):
         self.assertEqual(document.text("BT-1"), "GLX-4711")
         self.assertEqual((report.specification, report.findings, report.verdict),
                          ("peppol", [], "not judged"))
-        self.assertEqual(len(report.ran), 102)
+        self.assertEqual(len(report.ran), 200)
         self.assertEqual(sorted(report.not_built), ["en16931", "peppol"])
-        self.assertEqual(len(report.not_built["en16931"]), 979 - 102)
+        self.assertEqual(len(report.not_built["en16931"]), 979 - 200)
         self.assertEqual(len(report.not_built["peppol"]), 166)
         self.assertNotIn("BR-CO-10", report.not_built["en16931"])
-        self.assertEqual(report.not_built["en16931"]["BR-S-01"], "fatal")
+        self.assertEqual(report.not_built["en16931"]["BR-CL-01"], "fatal")
         fatal = sum(1 for flag in published.EN16931.values() if flag == "fatal") \
             + sum(1 for flag in published.PEPPOL.values() if flag == "fatal")
         built_fatal = sum(1 for i in REGISTRY["en16931"] if published.EN16931[i] == "fatal")
@@ -180,6 +182,10 @@ class EachRuleFailsAlone(unittest.TestCase):
     same test as BR-33, BR-38, BR-42 and BR-44, so each fails with its twin.
     """
     TWINS = {"BR-CO-21": "BR-33", "BR-CO-22": "BR-38", "BR-CO-23": "BR-42", "BR-CO-24": "BR-44"}
+    # And five change what the standard rated category's breakdown must come
+    # to, so its own rules fail beside them (`test_vat_rules.py`).
+    VAT = {"BR-CO-04": ["BR-S-08"], "BR-CO-11": ["BR-S-08"], "BR-CO-12": ["BR-S-08"],
+           "BR-CO-13": ["BR-S-08"], "BR-CO-17": ["BR-S-08", "BR-S-09"]}
     CASES = {
         "BR-CO-03": ("<cbc:DocumentCurrencyCode>", "<cbc:TaxPointDate>2026-10-02</cbc:TaxPointDate>"
                      "<cbc:DocumentCurrencyCode>",
@@ -262,10 +268,11 @@ class EachRuleFailsAlone(unittest.TestCase):
 
     def test_every_rule_built_has_a_case(self):
         self.assertEqual(set(self.CASES) | set(self.APART),
-                         {i for i in REGISTRY["en16931"] if not i[3:].isdigit()})
+                         {i for i in REGISTRY["en16931"] if i.startswith(("BR-CO-", "BR-DEC-"))})
 
     def expected(self, identifier: str) -> list:
-        return sorted({identifier, self.TWINS.get(identifier, identifier)})
+        return sorted({identifier, self.TWINS.get(identifier, identifier)}
+                      | set(self.VAT.get(identifier, ())))
 
     def test_each_change_fails_its_rule_and_no_other(self):
         for identifier, pairs in self.CASES.items():
@@ -281,7 +288,8 @@ class EachRuleFailsAlone(unittest.TestCase):
 
     def test_no_vat_breakdown_fails_only_the_rule_that_wants_one(self):
         start, end = INVOICE.index("    <cac:TaxSubtotal>"), INVOICE.index("  </cac:TaxTotal>")
-        self.assertEqual(failing(INVOICE[:start] + INVOICE[end:]), ["BR-CO-18"])
+        # And the one that wants a breakdown for the category the lines are in.
+        self.assertEqual(failing(INVOICE[:start] + INVOICE[end:]), ["BR-CO-18", "BR-S-01"])
 
     def test_an_empty_vat_breakdown_is_one_as_the_publishers_own_tests_have_it(self):
         self.assertNotIn("BR-CO-18", failing(invoice("<cac:TaxTotal><cac:TaxSubtotal/></cac:TaxTotal>")))
@@ -520,7 +528,7 @@ class WhatTheTestsSayExactly(unittest.TestCase):
     def test_a_failure_on_one_of_several_says_which(self):
         text = changed(INVOICE, "<cbc:Name>Installation</cbc:Name>\n      " + VAT_CATEGORY,
                        "<cbc:Name>Installation</cbc:Name>")
-        self.assertEqual(found(text), [("BR-CO-04", "BG-25[2]")])
+        self.assertEqual(found(text), [("BR-CO-04", "BG-25[2]"), ("BR-S-08", "BG-23")])
         text = changed(INVOICE, LINE_ALLOWANCE, LINE_ALLOWANCE.replace("50.00", "50.000"))
         self.assertEqual(found(text), [("BR-DEC-24", "BG-25[2]/BG-27/BT-136")])
 

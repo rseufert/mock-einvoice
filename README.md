@@ -4,7 +4,7 @@ A mock e-invoicing partner: EN 16931 invoices in and out, with the responses tha
 
 A sibling of [mock-sap](https://github.com/rseufert/mock-sap), [mock-edi](https://github.com/rseufert/mock-edi) and [mock-bank](https://github.com/rseufert/mock-bank), and of [mock-acme](https://github.com/rseufert/mock-acme), the integration between them.
 
-**It is not a mock yet.** What is built reads and writes invoices and holds them to the first 102 of the published rules. It has no server and answers nothing, and no document's verdict is "valid" until every fatal rule of its specification is built. [#1](https://github.com/rseufert/mock-einvoice/issues/1) says what the first release is to be; nothing is on PyPI until then.
+**It is not a mock yet.** What is built reads and writes invoices and holds them to the first 200 of the published rules. It has no server and answers nothing, and no document's verdict is "valid" until every fatal rule of its specification is built. [#1](https://github.com/rseufert/mock-einvoice/issues/1) says what the first release is to be; nothing is on PyPI until then.
 
 ## What is built
 
@@ -55,7 +55,7 @@ A document names its specification, and that decides its layers:
 
 | Layer | Pinned to | Published rules | Built |
 | --- | --- | --- | --- |
-| EN 16931 core | [validation artefacts 1.3.16](https://github.com/ConnectingEurope/eInvoicing-EN16931/tree/validation-1.3.16) | 979 (281 fatal) | 102: what a document must have in it (`BR-01` to `BR-65`), the calculation rules (`BR-CO-*`) and the decimals rules (`BR-DEC-*`) |
+| EN 16931 core | [validation artefacts 1.3.16](https://github.com/ConnectingEurope/eInvoicing-EN16931/tree/validation-1.3.16) | 979 (281 fatal) | 200: what a document must have in it (`BR-01` to `BR-65`), the calculation rules (`BR-CO-*`), the decimals rules (`BR-DEC-*`) and the ten families of VAT category rules (`BR-S-*`, `BR-Z-*`, `BR-E-*`, `BR-AE-*`, `BR-IC-*`, `BR-G-*`, `BR-O-*`, `BR-AF-*`, `BR-AG-*`, `BR-B-*`) |
 | Peppol BIS Billing 3.0 | 3.0.21, at commit [`806866b`](https://github.com/OpenPEPPOL/peppol-bis-invoice-3/commit/806866bd2bd91d7e9623b68f08164e8fbe9e67a0) (it has no tag) | 166 (139 fatal) | none |
 | XRechnung 3.0 | [Schematron 2.6.0](https://github.com/itplr-kosit/xrechnung-schematron/tree/v2.6.0) | 55 (46 fatal) | none |
 
@@ -106,6 +106,10 @@ A group with nothing in it is still there: an empty `TaxSubtotal` is a VAT break
 - **A tax category that names no scheme counts as VAT.** `BR-32`, `BR-37`, `BR-47` and `BR-48` look for a category whose scheme is VAT, and one with no `TaxScheme` at all is not that. The model does not hold whether a scheme was named, so here it passes where a real validator fails it. UBL's schema requires the element.
 - **An element the standard has once, sent twice, is one here.** Two seller addresses are held as one address with what was in both, and the reader says so (`REPEATED`). A published rule runs once for each; here it runs once, and where it takes one value and finds two it is reported as not computable.
 - **A date outside the years 0001 to 9999** cannot be compared here, and a rule that compares it (`BR-29`, `BR-30`) is reported as not computable. XPath can compare it. A date that names no time zone is compared as UTC, which XPath leaves to the implementation.
+- **A tax category on a line's allowance or charge is not seen.** The standard has none there and the reader does not hold one (`UNHELD`), so the VAT category rules that look at every `AllowanceCharge` see the document's and not a line's.
+- **A tax category with nothing in it but its scheme is not known to be there.** The rules for category O (`BR-O-11` to `BR-O-14`) count the categories that are not O, and one with no code is not O. Here a category is known by its code, its rate or its exemption reason, and on a line by its element; one with none of those is not counted.
+- **The VAT category rules differ between families in ways that look like accidents**, and are built as published. `BR-AF-01`, `BR-AG-01`, `BR-AF-04` and both `BR-B` rules compare a category code as written where their siblings trim it. `BR-G` and `BR-IC` want the seller's VAT identifier where the others take any tax registration. `BR-S-08` can be met by the allowances and charges alone, without the lines. `rules/en16931_vat.py` names each where it is made.
+- **One unit of leeway on a taxable amount is measured as a double.** `BR-S-08`, `BR-AF-08` and `BR-AG-08` are published as `xs:decimal(cbc:TaxableAmount - 1)`, which subtracts in binary floating point: 100.10 less one is a hair under 99.10. At exactly one unit of difference the rule passes or fails by that, here as there. It is the one place a float is used; no amount is held as one.
 - **Four rules are published twice.** `BR-CO-21` to `BR-CO-24` have the same test as `BR-33`, `BR-38`, `BR-42` and `BR-44`, so an allowance or charge with no reason fails two rules, as it does in a real validator.
 - **Six published rules cannot fail, here or anywhere.** `BR-CO-05` to `BR-CO-08` are published with the test `true()`. `BR-DEC-13` and `BR-DEC-15` compare a tax amount's currency with an element a tax amount does not have, so they select nothing and pass. They are built as published.
 - **A VAT rate under half a percent** rounds to nought in `BR-CO-17`, which then wants the tax to round to nought too. That is the published test, and it is built as published.
@@ -117,7 +121,7 @@ The rules, the reader and the writer are tested against files this project did n
 
 | Source, at the pinned version | What | How it comes out today |
 | --- | --- | --- |
-| EN 16931 unit tests | 1,137 cases, each a small document and what one rule should make of it | 460 agree, none disagree. 667 are for the 123 rules with cases that are not built yet, and are compared with nothing. 12 name `BR-CO-25`, which the pinned rule file does not have. |
+| EN 16931 unit tests | 1,137 cases, each a small document and what one rule should make of it | 1,047 agree, none disagree. 80 are for the 28 rules with cases that are not built yet, and are compared with nothing. 12 name `BR-CO-25`, which the pinned rule file does not have. |
 | EN 16931 examples | 17 documents | read, written back, and compared element for element by a reader that is not this one |
 | XRechnung test suite | 39 valid XRechnung 3.0 documents | read with nothing to say, written back element for element, and no built rule fails |
 | XRechnung test suite | 5 Extension and 1 CVD document | refused by name |

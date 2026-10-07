@@ -13,6 +13,15 @@ to the first of the published rules.
 
 ### Added
 
+- **The VAT category rules of the EN 16931 core** ([#9]): 98 rules in ten
+  families, one to a category code (`BR-S`, `BR-Z`, `BR-E`, `BR-AE`, `BR-IC`,
+  `BR-G`, `BR-O`, `BR-AF`, `BR-AG`, `BR-B`), which makes 200 built. They are
+  one pattern with each family's differences named, and the differences are
+  the published ones. All 587 of the publisher's unit test cases for them
+  agree; three of the rules have no published case and rest on this
+  project's tests. `BR-S-08`, `BR-AF-08` and `BR-AG-08` allow a taxable
+  amount one unit of leeway and are published computing it as a double, so
+  that one sum is done as a double here too. No amount is held as a float.
 - **The plain business rules of the EN 16931 core** ([#8]): `BR-01` to
   `BR-65`, 58 rules on what a document must have in it, which makes 102 built.
   Each asks what its published test asks: some that an element has something
@@ -83,3 +92,4 @@ to the first of the published rules.
 [#3]: https://github.com/rseufert/mock-einvoice/issues/3
 [#4]: https://github.com/rseufert/mock-einvoice/issues/4
 [#8]: https://github.com/rseufert/mock-einvoice/issues/8
+[#9]: https://github.com/rseufert/mock-einvoice/issues/9

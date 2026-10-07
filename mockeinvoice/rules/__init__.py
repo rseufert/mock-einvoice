@@ -151,3 +151,4 @@ def run(document: Document, layer: str) -> Iterator[Finding]:
 
 
 from . import en16931 as _en16931  # noqa: E402,F401  (registers its rules)
+from . import en16931_vat as _en16931_vat  # noqa: E402,F401

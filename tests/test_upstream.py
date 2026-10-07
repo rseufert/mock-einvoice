@@ -33,10 +33,10 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertEqual(disagreements, [])
         self.assertEqual(dict(counts), {
             "files": 278, "cases": 1137, "expectations": 1139,
-            "agree": 460,           # every case for a rule that is built
-            "not built": 667,       # compared with nothing, and not counted as agreeing
+            "agree": 1047,          # every case for a rule that is built
+            "not built": 80,        # compared with nothing, and not counted as agreeing
             "unpublished": 12})     # BR-CO-25, which the pinned rule file does not have
-        self.assertEqual(len(not_built), 123)
+        self.assertEqual(len(not_built), 28)
         self.assertTrue(set(not_built).isdisjoint(REGISTRY["en16931"]))
         self.assertLessEqual(set(not_built), set(published.EN16931))
 
@@ -47,13 +47,16 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
                 named.update(identifier for _kind, identifier in expectations)
         compared = named & set(REGISTRY["en16931"])
         # The publisher has cases for 19 of the 23 calculation rules built,
-        # and for every one of the 58 plain business rules.
-        self.assertEqual(len(compared), 19 + 58)
+        # for every one of the 58 plain business rules and for 95 of the 98
+        # VAT category rules.
+        self.assertEqual(len(compared), 19 + 58 + 95)
         self.assertEqual(sum(1 for i in compared if i.startswith("BR-CO-")), 19)
-        # No cases are published for the four that cannot fail, nor for any
-        # of the decimals rules: those rest on this project's own tests.
+        # No cases are published for the four that cannot fail, for any of
+        # the decimals rules, for the two split payment rules or for the
+        # exemption reason of an intra-community supply: those rest on this
+        # project's own tests.
         self.assertEqual(sorted(set(REGISTRY["en16931"]) - named), sorted(
-            ["BR-CO-05", "BR-CO-06", "BR-CO-07", "BR-CO-08"]
+            ["BR-CO-05", "BR-CO-06", "BR-CO-07", "BR-CO-08", "BR-B-01", "BR-B-02", "BR-IC-10"]
             + [i for i in REGISTRY["en16931"] if i.startswith("BR-DEC-")]))
 
     def test_a_rule_that_stops_working_is_a_disagreement_and_not_a_smaller_count(self):
@@ -77,7 +80,7 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         self.assertTrue(always and all(d[2] == "success" and d[4] == "fatal"
                                        for d in always), always)
         self.assertEqual(len(disagreements), len(silenced) + len(always))
-        self.assertEqual(counts["agree"] + counts["disagree"], 460)
+        self.assertEqual(counts["agree"] + counts["disagree"], 1047)
         self.assertEqual({d[0] for d in silenced}, {"Invoice-unit-UBL/BR-CO-10.xml"})
         self.assertEqual(upstream.tally("en16931")[1], [])       # and whole again, none
 

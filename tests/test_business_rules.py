@@ -172,6 +172,11 @@ class EachRuleFails(unittest.TestCase):
         "BR-65": (swap(' listID="STI"', ""), ()),
     }
 
+    # What the standard rated category's own rules make of the same changes:
+    # a breakdown whose amounts no longer come to what the lines, allowances
+    # and charges say (BR-S-08, BR-S-09), or that is no longer there (BR-S-01).
+    VAT = {'BR-16': ['BR-S-08'], 'BR-24': ['BR-S-08'], 'BR-31': ['BR-S-08'], 'BR-32': ['BR-S-08'], 'BR-36': ['BR-S-08'], 'BR-37': ['BR-S-08'], 'BR-45': ['BR-S-08', 'BR-S-09'], 'BR-46': ['BR-S-09'], 'BR-47': ['BR-S-01'], 'BR-48': ['BR-S-09']}
+
     def test_every_plain_rule_is_built_and_has_a_case(self):
         self.assertEqual(len(PLAIN), 58)
         self.assertLessEqual(set(PLAIN), set(REGISTRY["en16931"]))
@@ -180,7 +185,8 @@ class EachRuleFails(unittest.TestCase):
     def test_each_change_fails_its_rule_and_only_what_is_beside_it(self):
         for identifier, (change, beside) in self.CASES.items():
             with self.subTest(rule=identifier):
-                self.assertEqual(failing(change(INVOICE)), sorted((identifier,) + beside))
+                self.assertEqual(failing(change(INVOICE)), sorted(
+                    (identifier,) + beside + tuple(self.VAT.get(identifier, ()))))
 
     def test_all_but_one_are_fatal_and_too_much_of_a_card_number_is_a_warning(self):
         self.assertEqual([i for i in PLAIN if published.EN16931[i] != "fatal"], ["BR-51"])
@@ -207,7 +213,8 @@ class EachRuleFails(unittest.TestCase):
                 for invoices, credit_notes in names:
                     text = text.replace(invoices, credit_notes)
                 self.assertEqual(parse(text)[0].kind, "CreditNote")
-                self.assertEqual(failing(text), sorted((identifier,) + beside))
+                self.assertEqual(failing(text), sorted(
+                    (identifier,) + beside + tuple(self.VAT.get(identifier, ()))))
 
     def test_where_a_failure_is_says_which_of_several(self):
         self.assertEqual(found(self.CASES["BR-21"][0](INVOICE)), [("BR-21", "BG-25[1]")])
