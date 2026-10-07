@@ -9,7 +9,7 @@ from mockeinvoice.rules import REGISTRY, SCOPES, could_apply, peppol, published,
 from mockeinvoice.rules.tree import top
 from mockeinvoice.ubl import parse_tree, tree
 
-from . import upstream
+from . import unbuilt, upstream
 from .test_business_rules import cut
 from .test_rules import CREDIT_NOTE, INVOICE, changed
 
@@ -437,46 +437,25 @@ class EachRule(unittest.TestCase):
 
 
 class TheRulesForASellersCountry(unittest.TestCase):
+    """They are in `test_peppol_national_rules.py`. Here: that nothing of
+    Peppol's is left to wait on."""
+
     def root(self, text: str):
         return top(tree(text))
 
-    def test_they_are_not_built_and_each_set_has_its_country(self):
+    def test_they_are_built_and_no_set_of_peppols_is_scoped(self):
         national = [i for i in published.PEPPOL if not i.startswith(("PEPPOL-", "DE-R-"))]
         self.assertEqual(len(national), 71)
-        self.assertFalse(set(national) & set(REGISTRY["peppol"]))
-        prefixes = {re.match(r"[A-Z]+-[A-Z]-", i).group(0) for i in national}
-        self.assertEqual(prefixes, set(SCOPES["peppol"]))
-        self.assertEqual(SCOPES["en16931"], {})
-
-    def test_a_document_is_one_of_a_countrys_by_any_of_three_things(self):
-        dutch = self.root(INVOICE.replace("<cbc:IdentificationCode>DE<",
-                                          "<cbc:IdentificationCode> nl <"))
-        self.assertTrue(could_apply("peppol", "NL-R-001", dutch))
-        self.assertFalse(could_apply("peppol", "SE-R-001", dutch))
-        self.assertFalse(could_apply("peppol", "NL-R-001", self.root(INVOICE)))
-        # By the seller's VAT identifier, whatever its address.
-        by_vat = self.root(INVOICE.replace(">DE123456789<", ">se556012579001<"))
-        self.assertTrue(could_apply("peppol", "SE-R-001", by_vat))
-        # By its tax representative's.
-        by_representative = self.root(changed(
-            INVOICE, "<cac:Delivery>", "<cac:TaxRepresentativeParty><cac:PartyTaxScheme>"
-            "<cbc:CompanyID>NO923609016MVA</cbc:CompanyID></cac:PartyTaxScheme>"
-            "</cac:TaxRepresentativeParty><cac:Delivery>"))
-        self.assertTrue(could_apply("peppol", "NO-R-001", by_representative))
-        # Greece is GR or EL.
-        greek = self.root(INVOICE.replace(">DE123456789<", ">EL123456789<"))
-        self.assertTrue(could_apply("peppol", "GR-R-001-1", greek))
-        self.assertTrue(could_apply("peppol", "GR-S-008-1", greek))
-        # Not by the buyer's country.
-        self.assertFalse(could_apply("peppol", "IT-R-001", self.root(changed(
-            INVOICE, BUYERS_COUNTRY % "DE", BUYERS_COUNTRY % "IT"))))
+        self.assertLessEqual(set(national), set(REGISTRY["peppol"]))
+        self.assertEqual((SCOPES["peppol"], SCOPES["en16931"]), ({}, {}))
 
     def test_a_rule_of_no_set_always_could_apply(self):
         self.assertTrue(could_apply("peppol", "PEPPOL-EN16931-R001", self.root(french(INVOICE))))
+        self.assertTrue(could_apply("peppol", "SE-R-001", self.root(INVOICE)))
         self.assertTrue(could_apply("xrechnung", "BR-DE-1", self.root(INVOICE)))
 
     def test_every_published_context_of_a_national_rule_asks_for_the_sellers_country(self):
-        """What makes it safe not to wait on them: read from Peppol's own file."""
+        """Read from Peppol's own file: none of them is asked of every document."""
         if not os.path.exists(RULE_FILE):
             self.skipTest("Peppol's files are not in this repository: python tools/fetch_peppol.py")
         schematron = "{http://purl.oclc.org/dsdl/schematron}"
@@ -487,7 +466,7 @@ class TheRulesForASellersCountry(unittest.TestCase):
             if any(not i.startswith("PEPPOL-") for i in identifiers):
                 self.assertTrue(any(word in element.get("context") for word in asks), identifiers)
                 seen += len(identifiers)
-        self.assertEqual(seen, 102)         # Germany's 31 among them, which are built
+        self.assertEqual(seen, 102)         # the 71, and Germany's 31
 
 
 class TheVerdict(unittest.TestCase):
@@ -495,22 +474,37 @@ class TheVerdict(unittest.TestCase):
         _document, report = validate(french(INVOICE))
         self.assertEqual((report.findings, report.verdict), ([], "valid"))
         self.assertEqual(report.not_built, {"en16931": {}, "peppol": {}})
-        self.assertEqual(len(report.not_applicable["peppol"]), 71)
-        self.assertEqual(len(report.ran), 979 + 63 + 31)
+        self.assertEqual(report.not_applicable["peppol"], {})
+        self.assertEqual(len(report.ran), 979 + 63 + 31 + 71)
 
     def test_one_from_germany_is_valid_too_now_that_germanys_rules_are_built(self):
         _document, report = validate(INVOICE)
         self.assertEqual((report.findings, report.verdict), ([], "valid"))
         self.assertEqual(report.unasked, 0)
 
-    def test_one_from_a_country_whose_rules_are_not_built_waits_on_them(self):
+    def test_one_from_any_of_the_seven_countries_is_judged(self):
+        """The sample moved to Sweden was `not judged` while Sweden's
+        rules were not built. It is invalid: a German register number is not
+        a Swedish organisation number."""
         swedish = french(INVOICE).replace("<cbc:IdentificationCode>FR<",
                                           "<cbc:IdentificationCode>SE<")
         _document, report = validate(swedish)
+        self.assertEqual(([f.code for f in report.findings], report.verdict, report.unasked),
+                         (["SE-R-003", "SE-R-004", "SE-R-013", "SE-R-005"], "invalid", 0))
+
+    def test_a_document_waits_on_a_rule_that_is_published_and_not_built(self):
+        """No rule is, today. This is the package as it would be without
+        Sweden's, which is how it was."""
+        swedish = french(INVOICE).replace("<cbc:IdentificationCode>FR<",
+                                          "<cbc:IdentificationCode>SE<")
+        with unbuilt("peppol", "SE-R-"):
+            _document, report = validate(swedish)
         self.assertEqual((report.failures, report.verdict), ([], "not judged"))
         self.assertEqual(len(report.not_built["peppol"]), 13)
-        self.assertTrue(all(i.startswith("SE-R-") for i in report.not_built["peppol"]))
         self.assertEqual(report.unasked, 7)
+        # And with no way to say a set is another country's, every document does.
+        with unbuilt("peppol", "SE-R-"):
+            self.assertEqual(validate(INVOICE)[1].verdict, "not judged")
 
     def test_and_a_failure_is_invalid_wherever_it_is_from(self):
         _document, report = validate(changed(french(INVOICE), "<cbc:DueDate>2026-11-01",

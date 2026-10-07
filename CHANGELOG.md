@@ -8,7 +8,32 @@ says so where it does.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Peppol's rules for a seller in Denmark, Greece, Iceland, Italy, the
+  Netherlands, Norway and Sweden** ([#18]): 71 rules, 61 fatal, in
+  `mockeinvoice/rules/peppol_national.py`. Every rule Peppol BIS Billing
+  3.0.21 publishes is now built, 165 in all. All 282 cases Peppol publishes
+  for these rules agree. Iceland's ten have no published cases and rest on
+  this project's tests. **Changes behaviour:** a Peppol document from one of
+  those seven countries was `not judged`, and the server turned it away with
+  `NOT-JUDGED`. It is now `valid` or `invalid`. Peppol's own Swedish example
+  is `valid`.
+- `tools/fetch_peppol.py` fetches the unit tests for those countries and
+  Peppol's three national examples as well: 167 files, from 101.
+
+### Changed
+
+- **No document is `not judged` any more.** The verdict, the server's
+  `NOT-JUDGED` and `Report.not_built` are kept for a rule a specification
+  publishes before this package has it. `Report.not_applicable` is empty for
+  a Peppol document, where it listed the 71.
+
+### Removed
+
+- `mockeinvoice.rules.peppol.SCOPES`, `sellers_countries` and `from_`, which
+  said which unbuilt national rules a document could wait on. Nothing is
+  left for them to say.
 
 ## [0.1.0] - 2026-10-07
 

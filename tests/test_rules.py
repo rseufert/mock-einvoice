@@ -56,11 +56,10 @@ class TheEngine(unittest.TestCase):
         self.assertEqual(over, {"model": 44 + 58 + 98 + 23, "tree": 756})
         self.assertTrue(all((r.over == "tree") == i.startswith("UBL-")
                             for i, r in REGISTRY["en16931"].items()))
-        # Of Peppol's, its own 63 and Germany's 31 are built, and the other
-        # countries' are not.
-        self.assertEqual(sorted(REGISTRY["peppol"]), sorted(
-            i for i in published.PEPPOL if i.startswith(("PEPPOL-", "DE-R-"))))
-        self.assertEqual(len(REGISTRY["peppol"]), 63 + 31)
+        # Of Peppol's, all: its own 63, Germany's 31 and the other seven
+        # countries' 71.
+        self.assertEqual(sorted(REGISTRY["peppol"]), sorted(published.PEPPOL))
+        self.assertEqual(len(REGISTRY["peppol"]), 63 + 31 + 71)
         self.assertTrue(all(r.over == "tree" for r in REGISTRY["peppol"].values()))
         # Of XRechnung's, the 34 of a standard document; not its Extension's
         # or its CVD's.
@@ -115,13 +114,13 @@ class TheReport(unittest.TestCase):
         self.assertEqual(document.text("BT-1"), "GLX-4711")
         self.assertEqual((report.specification, report.findings, report.verdict),
                          ("peppol", [], "valid"))
-        # Every rule of the core ran, Peppol's own, and Germany's, where its
-        # seller and buyer are. The other countries' rules are not built and
-        # could not apply to it, so it does not wait on them.
-        self.assertEqual(len(report.ran), 979 + 63 + 31)
+        # Every rule of the core ran, and every one of Peppol's: its own,
+        # Germany's, where its seller and buyer are, and the other seven
+        # countries', which had nothing to ask of it.
+        self.assertEqual(len(report.ran), 979 + 63 + 31 + 71)
         self.assertEqual(report.not_built, {"en16931": {}, "peppol": {}})
         self.assertEqual(report.unasked, 0)
-        self.assertEqual(len(report.not_applicable["peppol"]), 71)
+        self.assertEqual(report.not_applicable["peppol"], {})
         self.assertEqual(report.not_applicable["en16931"], {})
 
     def test_an_xrechnung_document_is_owed_xrechnungs_rules_and_not_peppols(self):

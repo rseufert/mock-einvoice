@@ -157,12 +157,12 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         counts, disagreements, not_built = upstream.tally("peppol")
         self.assertEqual(disagreements, [])
         self.assertEqual(dict(counts), {
-            "files": 90, "cases": 400, "expectations": 396,
-            "agree": 396,           # every case, for Peppol's own rules and Germany's
+            "files": 153, "cases": 673, "expectations": 678,
+            "agree": 678,           # every case, for Peppol's own rules and every country's
             "not ours": 4})         # documents that are not an invoice or credit note
         self.assertEqual(not_built, {})
 
-    def test_the_list_of_peppols_files_is_the_examples_and_two_sets_of_unit_tests(self):
+    def test_the_list_of_peppols_files_is_the_examples_and_the_unit_tests(self):
         import importlib.util
         here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         spec = importlib.util.spec_from_file_location(
@@ -170,12 +170,15 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         tool = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(tool)
         listed = list(tool.listed())
-        # The examples, two sets of unit tests, and the rule file itself,
-        # which a test reads Peppol's code lists from.
-        self.assertEqual(len(listed), 101)
+        # The examples and the national ones, the unit tests of Peppol's own
+        # rules and of each country that has any (Iceland has none), and the
+        # rule file itself, which a test reads Peppol's code lists from.
+        self.assertEqual(len(listed), 101 + 63 + 3)
         folders = sorted({path.rsplit("/", 1)[0] for _blob, _size, path in listed})
-        self.assertEqual(folders, ["rules/examples", "rules/sch", "rules/unit-UBL-DE",
-                                   "rules/unit-UBL-PEPPOL"])
+        self.assertEqual(folders, [
+            "rules/examples", "rules/national-examples/GR", "rules/national-examples/NO", "rules/sch", "rules/unit-UBL-DE", "rules/unit-UBL-DK",
+            "rules/unit-UBL-GR", "rules/unit-UBL-IT", "rules/unit-UBL-NL", "rules/unit-UBL-NO",
+            "rules/unit-UBL-PEPPOL", "rules/unit-UBL-SE"])
         for blob, size, path in listed:
             self.assertRegex(blob, "^[0-9a-f]{40}$")
             self.assertGreater(size, 0)
@@ -261,16 +264,11 @@ class DocumentsThisProjectDidNotWrite(unittest.TestCase):
                 self.taken(name, data, "peppol")
             count += 1
         self.assertEqual(count, 10)
-        # Nine are valid: every fatal rule that could apply to them ran and
-        # found nothing. The tenth is from a seller in Sweden, whose rules
-        # are not built, so it is not judged.
+        # All ten are valid: every fatal rule ran and found nothing. One is
+        # from a seller in Sweden, and was not judged until Sweden's rules
+        # were built.
         names = [name for name, _data in documents(os.path.join(PEPPOL, "examples"))]
-        waiting = [name for name in names if self.verdicts[name] != "valid"]
-        self.assertEqual(waiting, ["vat-category-O.xml"])
-        self.assertEqual(self.verdicts["vat-category-O.xml"], "not judged")
-        _document, report = validate(dict(documents(os.path.join(PEPPOL, "examples")))[
-            "vat-category-O.xml"])
-        self.assertTrue(all(i.startswith("SE-R-") for i in report.not_built["peppol"]))
+        self.assertEqual([name for name in names if self.verdicts[name] != "valid"], [])
 
 
 if __name__ == "__main__":
