@@ -29,6 +29,7 @@ The supplier:
 
 And both:
 
+    GET   /_mock/health                 that it is up, and its version
     GET   /_mock/turned-away            what was not taken in, and why
     POST  /_mock/validate               a document held to its rules, and not kept
     POST  /_mock/reset                  forget everything
@@ -44,7 +45,6 @@ import argparse
 import datetime
 import json
 import re
-import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -181,6 +181,7 @@ ROUTES: List[Tuple[str, "re.Pattern[str]", str]] = [
         ("GET", r"/_mock/sent/(\d+)", "one_sent"),
         ("GET", r"/_mock/sent/(\d+)/document", "sent_document"),
         ("GET", r"/_mock/answers/(\d+)", "answer_document"),
+        ("GET", "/_mock/health", "health"),
         ("GET", "/_mock/turned-away", "turned_away"),
         ("POST", "/_mock/validate", "validate"),
         ("POST", "/_mock/reset", "reset"),
@@ -368,6 +369,10 @@ class Handler(BaseHTTPRequestHandler):
             raise Problem(404, "NO-SUCH-RESPONSE", "no response %s was received" % identifier)
         self.send(200, XML, heard.xml)
 
+    def health(self) -> None:
+        self.json(200, {"status": "ok", "version": __version__,
+                        "held": len(self.buyer.invoices), "sent": len(self.supplier.sent)})
+
     def turned_away(self) -> None:
         with self.buyer.lock, self.supplier.lock:
             both = [(when, side, code, reason)
@@ -448,7 +453,7 @@ def arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                         type=datetime.datetime.fromisoformat,
                         help="the date and time on every response, for output that does "
                              "not change from run to run; the default is now, in UTC")
-    parser.add_argument("--quiet", action="store_true", help="do not log requests")
+    parser.add_argument("-q", "--quiet", action="store_true", help="log nothing per request")
     parser.add_argument("--version", action="version", version=__version__)
     return parser.parse_args(argv)
 
@@ -461,7 +466,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     supplier = Supplier(now=now, deliver=poster(asked.buyer_url) if asked.buyer_url else None)
     server = serve(buyer, asked.host, asked.port, asked.quiet, supplier)
     print("mock-einvoice %s: a buyer and a supplier on http://%s:%d"
-          % ((__version__,) + server.server_address[:2]), file=sys.stderr, flush=True)
+          % ((__version__,) + server.server_address[:2]), flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -39,6 +39,10 @@ built, and was in no release.
   be pointed at each other. The supplier writes no invoices of its own.
   `GET /` now says `"sides"`, and each entry of `/_mock/turned-away` says
   which side turned it away.
+- **`GET /_mock/health` and `-q`**, as mock-sap, mock-edi and mock-bank have
+  them: what starts the mocks together asks each for its health and passes
+  each `-q`. The line the server prints when it starts goes to standard
+  output, as theirs do.
 - **The server, as a buyer** ([#25]): `mock-einvoice --port 8100`, or
   `python -m mockeinvoice`. `POST /invoices` takes a UBL invoice or credit
   note in if it is `valid`, and turns it away with its findings if it is

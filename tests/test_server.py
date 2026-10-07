@@ -157,7 +157,12 @@ class TheMocksSide(Served):
         self.assertEqual((body["mock"], body["version"], body["sides"], body["answers"]),
                          ("mock-einvoice", __version__, ["buyer", "supplier"], "required"))
         self.assertIn("POST /_mock/invoices/<id>/responses", body["paths"])
-        self.assertEqual(len(body["paths"]), 18)
+        self.assertEqual(len(body["paths"]), 19)
+
+    def test_health_is_what_the_other_mocks_answer_too(self):
+        self.call("POST", "/_mock/sent", INVOICE)
+        self.assertEqual(self.call("GET", "/_mock/health")[::2],
+                         (200, {"status": "ok", "version": __version__, "held": 1, "sent": 1}))
 
     def test_what_is_held(self):
         self.call("POST", "/invoices", XRECHNUNG)
@@ -416,6 +421,7 @@ class Delivery(Served):
 
 class TheCommandLine(unittest.TestCase):
     def test_the_defaults(self):
+        self.assertTrue(arguments(["-q"]).quiet)
         asked = arguments([])
         self.assertEqual((asked.host, asked.port, asked.answers, asked.seller_url,
                           asked.buyer_url, asked.clock),
@@ -435,9 +441,9 @@ class TheCommandLine(unittest.TestCase):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         running = subprocess.Popen(
             [sys.executable, "-m", "mockeinvoice", "--port", "0", "--quiet"],
-            cwd=root, stderr=subprocess.PIPE, universal_newlines=True)
+            cwd=root, stdout=subprocess.PIPE, universal_newlines=True)
         try:
-            said = running.stderr.readline()
+            said = running.stdout.readline()
             found = re.match(r"mock-einvoice \S+: a buyer and a supplier on (http://127\.0\.0\.1:\d+)$",
                              said.strip())
             self.assertTrue(found, said)
@@ -447,7 +453,7 @@ class TheCommandLine(unittest.TestCase):
         finally:
             running.terminate()
             running.wait(timeout=10)
-            running.stderr.close()
+            running.stdout.close()
 
 
 if __name__ == "__main__":

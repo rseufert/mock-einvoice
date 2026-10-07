@@ -221,6 +221,7 @@ The supplier writes no invoices. It sends what it is given.
 
 | | |
 | --- | --- |
+| `GET /_mock/health` | that it is up, its version, and how many documents it holds and has sent |
 | `GET /_mock/turned-away` | what was not taken in, on which side, and why |
 | `POST /_mock/validate` | an invoice, a credit note or an Invoice Response held to its rules, and not kept |
 | `POST /_mock/reset` | forget every document and response, on both sides |
