@@ -24,7 +24,7 @@ import re
 from decimal import ROUND_FLOOR, Decimal
 from typing import Iterable, List, Optional
 
-from ..model import Group
+from ..model import DECIMAL, Group
 
 HALF = Decimal("0.5")
 SMALLEST_DOUBLE = Decimal("2.5e-324")     # below this a double rounds to zero
@@ -119,8 +119,8 @@ def said(group: Group, term: str) -> str:
     return normalize_space(values[0].text) if values else ""
 
 
-def doubles(group: Group, term: str) -> List[Optional[Decimal]]:
-    """A term's values as `cbc:X >= 0` reads them: each as an `xs:double`.
+def doubles_of(texts: Iterable[str], what: str = "it") -> List[Optional[Decimal]]:
+    """Texts as `cbc:X >= 0` reads them: each as an `xs:double`.
 
     That is wider than a decimal: `1e3` is one, and `INF`, and `NaN`, which
     is not greater than, less than or equal to anything and is None here.
@@ -129,10 +129,10 @@ def doubles(group: Group, term: str) -> List[Optional[Decimal]]:
     matters to a comparison with zero: what is too small for it is zero.
     """
     numbers: List[Optional[Decimal]] = []
-    for value in group.values(term):
-        text = normalize_space(value.text)
+    for written in texts:
+        text = normalize_space(written)
         if not DOUBLE.fullmatch(text):
-            raise Incomputable("%s is %r, which is not a number" % (term, value.text))
+            raise Incomputable("%s is %r, which is not a number" % (what, written))
         if text == "NaN":
             numbers.append(None)
             continue
@@ -141,20 +141,20 @@ def doubles(group: Group, term: str) -> List[Optional[Decimal]]:
     return numbers
 
 
-def xs_date(group: Group, term: str) -> Optional[int]:
-    """`xs:date(cbc:X)`, as something to compare: the minute its day starts.
+def doubles(group: Group, term: str) -> List[Optional[Decimal]]:
+    """A term's values, each as an `xs:double`: see `doubles_of`."""
+    return doubles_of((value.text for value in group.values(term)), term)
 
-    None if the term is not there. A date may name a time zone, and one that
-    names none is taken as UTC here; XPath leaves that to the implementation.
-    Twice, or not a date, is an XPath error. So, here, is a year outside 0001
-    to 9999, which XPath can compute with and this cannot.
+
+def date_of(text: str, what: str = "it") -> int:
+    """`xs:date('...')`, as something to compare: the minute its day starts.
+
+    A date may name a time zone, and one that names none is taken as UTC
+    here; XPath leaves that to the implementation. Text that is not a date is
+    an XPath error. So, here, is a year outside 0001 to 9999, which XPath can
+    compute with and this cannot.
     """
-    values = group.values(term)
-    if not values:
-        return None
-    if len(values) > 1:
-        raise Incomputable("%s occurs %d times where the rule takes one" % (term, len(values)))
-    match = XS_DATE.fullmatch(normalize_space(values[0].text))
+    match = XS_DATE.fullmatch(normalize_space(text))
     try:
         if not match:
             raise ValueError
@@ -164,29 +164,52 @@ def xs_date(group: Group, term: str) -> Optional[int]:
         if minutes > 59 or hours * 60 + minutes > 14 * 60:
             raise ValueError
     except ValueError:
-        raise Incomputable("%s is %r, which is not a date" % (term, values[0].text))
+        raise Incomputable("%s is %r, which is not a date" % (what, text))
     offset = hours * 60 + minutes
     return day.toordinal() * 1440 - (-offset if zone[0] == "-" else offset)
 
 
-def nudged(group: Group, term: str, by: int) -> Optional[Decimal]:
-    """`xs:decimal(cbc:X + 1)` in a rule's test, which is not the amount plus one.
-
-    An element in arithmetic is read as a double, so the sum is a double's
-    sum, and only then made a decimal: exactly the double it came to. 100.10
-    less one is a hair under 99.10 that way. The rules that allow a taxable
-    amount one unit of leeway are written like this, so at exactly one unit
-    they pass or fail by the double. This is the one place a binary float is
-    used, because the published test uses one.
-
-    None if the term is not there; twice, or not a number, is an XPath error.
-    """
-    values = doubles(group, term)
+def xs_date(group: Group, term: str) -> Optional[int]:
+    """`xs:date(cbc:X)` of a term: None if it is not there; twice, or not a
+    date, is an XPath error."""
+    values = group.values(term)
     if not values:
         return None
     if len(values) > 1:
         raise Incomputable("%s occurs %d times where the rule takes one" % (term, len(values)))
-    text = normalize_space(group.values(term)[0].text)
-    if values[0] is None or "INF" in text:
-        raise Incomputable("%s is %r, which no decimal can be made of" % (term, text))
-    return Decimal(float(text) + by)
+    return date_of(values[0].text, term)
+
+
+def decimal_of(text: str, what: str = "it") -> Decimal:
+    """`xs:decimal('...')`: an XPath error if the text is not a decimal."""
+    trimmed = normalize_space(text)
+    if not DECIMAL.fullmatch(trimmed):
+        raise Incomputable("%s is %r, which is not a decimal number" % (what, text))
+    return Decimal(trimmed)
+
+
+def double_sum(text: str, by: str) -> Decimal:
+    """`xs:decimal(element + 0.02)` in a published test: the sum as a double,
+    made a decimal. An element in arithmetic is read as a double, so the sum
+    is a double's, and exactly that double is what is compared. This is the
+    one place a binary float is used, because the published tests use one.
+    """
+    trimmed = normalize_space(text)
+    if not DOUBLE.fullmatch(trimmed) or "INF" in trimmed or trimmed == "NaN":
+        raise Incomputable("%r is not a number a decimal can be made of" % text)
+    return Decimal(float(trimmed) + float(by))
+
+
+def nudged(group: Group, term: str, by: int) -> Optional[Decimal]:
+    """`xs:decimal(cbc:X + 1)` in a rule's test, which is not the amount plus
+    one: see `double_sum`. 100.10 less one is a hair under 99.10 that way, so
+    at exactly one unit of leeway a rule passes or fails by the double.
+
+    None if the term is not there; twice, or not a number, is an XPath error.
+    """
+    values = group.values(term)
+    if not values:
+        return None
+    if len(values) > 1:
+        raise Incomputable("%s occurs %d times where the rule takes one" % (term, len(values)))
+    return double_sum(values[0].text, str(by))

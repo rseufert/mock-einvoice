@@ -15,8 +15,10 @@ README pins:
 What is taken from them is each rule's identifier and its flag, and nothing
 else: no rule's wording and no rule's test.
 """
-import re
 import sys
+import xml.etree.ElementTree as ET
+
+SCHEMATRON = "{http://purl.oclc.org/dsdl/schematron}"
 
 HEAD = '''"""Every published rule's identifier and flag, by layer. Generated.
 
@@ -42,14 +44,15 @@ SOURCES = {
 
 
 def rules(path):
-    """(identifier, flag) for each assertion, in the file's order, once each."""
-    text = open(path, encoding="utf-8").read()
+    """(identifier, flag) for each assertion, in the file's order, once each.
+
+    Read as XML and not as text: a rule that is commented out is not
+    published, and a test may have a `>` in it.
+    """
     found = {}
-    for tag in re.findall(r"<(?:assert|report)\b[^>]*>", text, flags=re.S):
-        identifier = re.search(r'\bid="([^"]+)"', tag)
-        flag = re.search(r'\bflag="([^"]+)"', tag)
-        if identifier:
-            found.setdefault(identifier.group(1), flag.group(1) if flag else "fatal")
+    for element in ET.parse(path).getroot().iter():
+        if element.tag in (SCHEMATRON + "assert", SCHEMATRON + "report") and element.get("id"):
+            found.setdefault(element.get("id"), element.get("flag") or "fatal")
     return found
 
 

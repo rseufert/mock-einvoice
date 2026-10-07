@@ -60,7 +60,7 @@
   </cac:AccountingSupplierParty>
   <cac:AccountingCustomerParty>
     <cac:Party>
-      <cbc:EndpointID schemeID="0088">4098765000004</cbc:EndpointID>
+      <cbc:EndpointID schemeID="0088">4098765000003</cbc:EndpointID>
       <cac:PostalAddress>
         <cbc:StreetName>Hauptstrasse 5</cbc:StreetName>
         <cbc:CityName>Berlin</cbc:CityName>

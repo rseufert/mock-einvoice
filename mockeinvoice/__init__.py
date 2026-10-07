@@ -1,7 +1,7 @@
 """mock-einvoice: EN 16931 invoices, read, held to their rules, and answered.
 
-So far: UBL 2.1 invoices and credit notes in and out, and the rules of the
-EN 16931 core.
+So far: UBL 2.1 invoices and credit notes in and out, the rules of the
+EN 16931 core, and Peppol's own.
 
     from mockeinvoice import read, validate, write
 
@@ -12,15 +12,15 @@ EN 16931 core.
     xml = write(document)
 
     document, report = validate(xml)
-    report.verdict                              # "invalid" or "not judged"
+    report.verdict                              # "invalid", "not judged" or "valid"
     for finding in report.failures:
         finding.code, finding.path, finding.text    # "BR-CO-10", "BT-106", ...
 
 `read` refuses, with `Refused`, what is not built: anything that is not a UBL
 `Invoice` or `CreditNote`, and any specification other than Peppol BIS Billing
 3.0 and XRechnung 3.0. `validate` holds a document to the rules that are
-built, and says which were not: until all of a specification's fatal rules
-are, no document's verdict is "valid".
+built, and says which were not: a document's verdict is "valid" only when
+every fatal rule that could apply to it ran and found nothing.
 """
 from __future__ import annotations
 

@@ -9,10 +9,21 @@ says so where it does.
 ## [Unreleased]
 
 Nothing is released yet. What is here reads and writes invoices and holds them
-to every rule of the EN 16931 core.
+to every rule of the EN 16931 core and to Peppol's own rules.
 
 ### Added
 
+- **Peppol BIS Billing 3.0's own rules** ([#16]): the 63 Peppol asks of every
+  document, `PEPPOL-EN16931-*` and `PEPPOL-COMMON-*`, among them the
+  checksums of identifiers by their scheme. All 331 of Peppol's unit test
+  cases for them agree. Nothing is copied from Peppol's rule file: the rules
+  are written from reading its tests, and its code lists are the core's with
+  the differences named.
+- **A verdict of `valid`** ([#16]). A report now lists apart the unbuilt
+  rules that could not apply to a document (`not_applicable`): the rules for
+  a seller's country, of a document from another. They are not waited on, so
+  a Peppol document from a country with no national rules, with nothing found
+  wrong, is `valid`. Nine of Peppol's ten examples are.
 - **The rules of the EN 16931 core about the UBL document itself** ([#11]):
   `UBL-CR`, `UBL-DT` and `UBL-SR`, 756 rules, which makes all 979 of the core
   built. They are asked of the document's elements and not of the model:
@@ -60,8 +71,8 @@ to every rule of the EN 16931 core.
   published rule; the publisher's wording is not reproduced. The arithmetic
   is XPath's, as the published tests have it: a tie rounds towards positive
   infinity, and a total that is absent equals nothing.
-- **Every published rule listed, built or not** ([#3]): 979 for EN 16931, 166
-  for Peppol BIS Billing 3.0.21 and 55 for XRechnung 3.0, by identifier and
+- **Every published rule listed, built or not** ([#3]): 979 for EN 16931, 165
+  for Peppol BIS Billing 3.0.21 and 56 for XRechnung 3.0, by identifier and
   flag. A report says which ran and which did not, and a document's verdict
   is `invalid` or `not judged`. It is not `valid` while a fatal rule of its
   specification is unbuilt.
@@ -103,6 +114,14 @@ to every rule of the EN 16931 core.
 
 ### Fixed
 
+- **The lists of published rules were read as text, and were wrong by one
+  rule each for Peppol and XRechnung.** One Peppol rule that is commented out
+  in its source was listed (`PEPPOL-COMMON-R048`), and one XRechnung rule
+  whose test has a `>` in it was missed (`BR-DEX-02`). They are read as XML
+  now: 165 rules for Peppol and 56 for XRechnung. Neither is fatal, so no
+  verdict was affected. Not in any release.
+- The sample documents gave the buyer a GLN with a wrong check digit. Peppol's
+  rule found it.
 - The three sample documents named an item classification scheme, `CPV`,
   that is not in the code list. The code list rule found it.
 - **A creditor identifier on the seller stays on the seller** ([#4]). `BT-90`
@@ -119,3 +138,4 @@ to every rule of the EN 16931 core.
 [#9]: https://github.com/rseufert/mock-einvoice/issues/9
 [#10]: https://github.com/rseufert/mock-einvoice/issues/10
 [#11]: https://github.com/rseufert/mock-einvoice/issues/11
+[#16]: https://github.com/rseufert/mock-einvoice/issues/16
