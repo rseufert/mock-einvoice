@@ -8,10 +8,27 @@ says so where it does.
 
 ## [Unreleased]
 
-Nothing is released yet. What is here reads and writes invoices; it does not
-yet hold one to any rule.
+Nothing is released yet. What is here reads and writes invoices and holds them
+to the first of the published rules.
 
 ### Added
+
+- **A rule engine, and the first 44 rules of the EN 16931 core** ([#3]): the
+  calculation rules (`BR-CO-*`) and the rules on how many decimals an amount
+  carries (`BR-DEC-*`). A rule is one function under its published identifier.
+  A finding gives that identifier, the publisher's flag, where in the model
+  it failed, a description in this project's words, and a link to the
+  published rule; the publisher's wording is not reproduced. The arithmetic
+  is XPath's, as the published tests have it: a tie rounds towards positive
+  infinity, and a total that is absent equals nothing.
+- **Every published rule listed, built or not** ([#3]): 979 for EN 16931, 166
+  for Peppol BIS Billing 3.0.21 and 55 for XRechnung 3.0, by identifier and
+  flag. A report says which ran and which did not, and a document's verdict
+  is `invalid` or `not judged`. It is not `valid` while a fatal rule of its
+  specification is unbuilt.
+- **A group with nothing in it is still there** ([#3]). An empty VAT breakdown
+  is a VAT breakdown, an invoicing period with no dates is an invoicing
+  period: the published rules ask whether they exist, so the model can say.
 
 - **A model of the invoice as EN 16931 describes it** ([#2]): every business
   term under its own number (`BT-1` to `BT-165`), the groups that repeat as
@@ -32,3 +49,4 @@ yet hold one to any rule.
   Extension and CVD identifiers named as such.
 
 [#2]: https://github.com/rseufert/mock-einvoice/issues/2
+[#3]: https://github.com/rseufert/mock-einvoice/issues/3

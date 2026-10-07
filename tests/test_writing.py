@@ -249,8 +249,14 @@ class WhatIsWritten(unittest.TestCase):
         written = write(document)
         self.assertEqual([p for p, _t, _a in leaves(written)],
                          ["/CreditNote/PaymentMeans/PaymentDueDate"])
+        # UBL has no other place for it, so what is written has a payment
+        # instruction the document did not: the date is kept, and so is that.
         again, findings = parse(written)
-        self.assertEqual((again, findings), (document, []))
+        self.assertEqual(findings, [])
+        self.assertEqual(again.text("BT-9"), "2026-11-01")
+        self.assertEqual(len(again.all("BG-16")), 1)
+        self.assertTrue(again.all("BG-16")[0].empty())
+        self.assertEqual(parse(write(again))[0], again)
 
     def test_a_credit_notes_due_date_is_written_once_however_many_payment_means(self):
         document = Document(kind="CreditNote")
@@ -268,8 +274,9 @@ class WhatIsWritten(unittest.TestCase):
     def test_nothing_in_the_package_says_float(self):
         import inspect
         import mockeinvoice
-        from mockeinvoice import model, specification
-        for module in (mockeinvoice, model, specification, ubl):
+        from mockeinvoice import model, rules, specification
+        from mockeinvoice.rules import calculation, en16931
+        for module in (mockeinvoice, model, specification, ubl, rules, calculation, en16931):
             source = inspect.getsource(module)
             code = "\n".join(line.split("#")[0] for line in source.splitlines())
             self.assertNotIn("float(", code, module.__name__)

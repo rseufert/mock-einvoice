@@ -169,12 +169,17 @@ class Wrap:
     no `when` comes last and takes what is left. `per` names the term
     the element is written once for each value of: one `PartyIdentification`
     to an identifier. `write` says, of the document, whether to write it here
-    at all, for a term UBL has two places for.
+    at all, for a term UBL has two places for. `marks` names the group of the
+    standard that this element is, where that group occurs once: its terms go
+    to the group around it, and if it held nothing, that it was there at all
+    is noted on that group, so it can be asked and is written back.
     """
 
     def __init__(self, tag: str, children: list, when: Optional[Callable] = None,
-                 per: str = "", write: Optional[Callable[[Group], bool]] = None):
+                 per: str = "", write: Optional[Callable[[Group], bool]] = None,
+                 marks: str = ""):
         self.tag, self.children, self.when, self.per, self.write = tag, children, when, per, write
+        self.marks = marks      # the once-only group this element is: "BG-4"
 
 
 class Many:
@@ -247,9 +252,9 @@ def has_payee(document: Group) -> bool:
 VAT_SCHEME = Wrap(cac("TaxScheme"), [Fixed(cbc("ID"), "VAT")])
 
 
-def address(tag: str, line1: str, line2: str, city: str, post_code: str,
+def address(tag: str, group: str, line1: str, line2: str, city: str, post_code: str,
             subdivision: str, line3: str, country: str) -> Wrap:
-    return Wrap(cac(tag), [
+    return Wrap(cac(tag), marks=group, children=[
         Leaf(cbc("StreetName"), line1), Leaf(cbc("AdditionalStreetName"), line2),
         Leaf(cbc("CityName"), city), Leaf(cbc("PostalZone"), post_code),
         Leaf(cbc("CountrySubentity"), subdivision),
@@ -304,7 +309,7 @@ def binding(kind: str) -> List[Entry]:
     head += [
         Leaf(cbc("DocumentCurrencyCode"), "BT-5"), Leaf(cbc("TaxCurrencyCode"), "BT-6"),
         Leaf(cbc("AccountingCost"), "BT-19"), Leaf(cbc("BuyerReference"), "BT-10"),
-        Wrap(cac("InvoicePeriod"), [
+        Wrap(cac("InvoicePeriod"), marks="BG-14", children=[
             Leaf(cbc("StartDate"), "BT-73"), Leaf(cbc("EndDate"), "BT-74"),
             Leaf(cbc("DescriptionCode"), "BT-8")]),
         Wrap(cac("OrderReference"), [
@@ -342,49 +347,49 @@ def binding(kind: str) -> List[Entry]:
             originator]
 
     parties: List[Entry] = [
-        Wrap(cac("AccountingSupplierParty"), [Wrap(cac("Party"), [
+        Wrap(cac("AccountingSupplierParty"), marks="BG-4", children=[Wrap(cac("Party"), [
             Leaf(cbc("EndpointID"), "BT-34", ["schemeID"]),
             creditor_identifier(lambda document: not has_payee(document)),
             identification("BT-29"),
             Wrap(cac("PartyName"), [Leaf(cbc("Name"), "BT-28")]),
-            address("PostalAddress", "BT-35", "BT-36", "BT-37", "BT-38", "BT-39",
+            address("PostalAddress", "BG-5", "BT-35", "BT-36", "BT-37", "BT-38", "BT-39",
                     "BT-162", "BT-40"),
             TaxRegistration("BT-31", "BT-32"),
             Wrap(cac("PartyLegalEntity"), [
                 Leaf(cbc("RegistrationName"), "BT-27"),
                 Leaf(cbc("CompanyID"), "BT-30", ["schemeID"]),
                 Leaf(cbc("CompanyLegalForm"), "BT-33")]),
-            Wrap(cac("Contact"), [
+            Wrap(cac("Contact"), marks="BG-6", children=[
                 Leaf(cbc("Name"), "BT-41"), Leaf(cbc("Telephone"), "BT-42"),
                 Leaf(cbc("ElectronicMail"), "BT-43")])])]),
-        Wrap(cac("AccountingCustomerParty"), [Wrap(cac("Party"), [
+        Wrap(cac("AccountingCustomerParty"), marks="BG-7", children=[Wrap(cac("Party"), [
             Leaf(cbc("EndpointID"), "BT-49", ["schemeID"]),
             identification("BT-46"),
             Wrap(cac("PartyName"), [Leaf(cbc("Name"), "BT-45")]),
-            address("PostalAddress", "BT-50", "BT-51", "BT-52", "BT-53", "BT-54",
+            address("PostalAddress", "BG-8", "BT-50", "BT-51", "BT-52", "BT-53", "BT-54",
                     "BT-163", "BT-55"),
             TaxRegistration("BT-48"),
             Wrap(cac("PartyLegalEntity"), [
                 Leaf(cbc("RegistrationName"), "BT-44"),
                 Leaf(cbc("CompanyID"), "BT-47", ["schemeID"])]),
-            Wrap(cac("Contact"), [
+            Wrap(cac("Contact"), marks="BG-9", children=[
                 Leaf(cbc("Name"), "BT-56"), Leaf(cbc("Telephone"), "BT-57"),
                 Leaf(cbc("ElectronicMail"), "BT-58")])])]),
-        Wrap(cac("PayeeParty"), [
+        Wrap(cac("PayeeParty"), marks="BG-10", children=[
             creditor_identifier(has_payee),
             identification("BT-60"),
             Wrap(cac("PartyName"), [Leaf(cbc("Name"), "BT-59")]),
             Wrap(cac("PartyLegalEntity"), [Leaf(cbc("CompanyID"), "BT-61", ["schemeID"])])]),
-        Wrap(cac("TaxRepresentativeParty"), [
+        Wrap(cac("TaxRepresentativeParty"), marks="BG-11", children=[
             Wrap(cac("PartyName"), [Leaf(cbc("Name"), "BT-62")]),
-            address("PostalAddress", "BT-64", "BT-65", "BT-66", "BT-67", "BT-68",
+            address("PostalAddress", "BG-12", "BT-64", "BT-65", "BT-66", "BT-67", "BT-68",
                     "BT-164", "BT-69"),
             TaxRegistration("BT-63")]),
-        Wrap(cac("Delivery"), [
+        Wrap(cac("Delivery"), marks="BG-13", children=[
             Leaf(cbc("ActualDeliveryDate"), "BT-72"),
             Wrap(cac("DeliveryLocation"), [
                 Leaf(cbc("ID"), "BT-71", ["schemeID"]),
-                address("Address", "BT-75", "BT-76", "BT-77", "BT-78", "BT-79",
+                address("Address", "BG-15", "BT-75", "BT-76", "BT-77", "BT-78", "BT-79",
                         "BT-165", "BT-80")]),
             Wrap(cac("DeliveryParty"), [Wrap(cac("PartyName"), [Leaf(cbc("Name"), "BT-70")])])])]
 
@@ -393,14 +398,14 @@ def binding(kind: str) -> List[Entry]:
         payment.append(Leaf(cbc("PaymentDueDate"), "BT-9", root=True))
     payment += [
         Leaf(cbc("PaymentID"), "BT-83"),
-        Wrap(cac("CardAccount"), [
+        Wrap(cac("CardAccount"), marks="BG-18", children=[
             Leaf(cbc("PrimaryAccountNumberID"), "BT-87"),
             Leaf(cbc("NetworkID"), "ubl:NetworkID"),
             Leaf(cbc("HolderName"), "BT-88")]),
-        Wrap(cac("PayeeFinancialAccount"), [
+        Wrap(cac("PayeeFinancialAccount"), marks="BG-17", children=[
             Leaf(cbc("ID"), "BT-84"), Leaf(cbc("Name"), "BT-85"),
             Wrap(cac("FinancialInstitutionBranch"), [Leaf(cbc("ID"), "BT-86")])]),
-        Wrap(cac("PaymentMandate"), [
+        Wrap(cac("PaymentMandate"), marks="BG-19", children=[
             Leaf(cbc("ID"), "BT-89"),
             Wrap(cac("PayerFinancialAccount"), [Leaf(cbc("ID"), "BT-91")])])]
 
@@ -408,7 +413,7 @@ def binding(kind: str) -> List[Entry]:
         Leaf(cbc("ID"), "BT-126"), Leaf(cbc("Note"), "BT-127"),
         Leaf(cbc("InvoicedQuantity" if invoice else "CreditedQuantity"), "BT-129"),
         Leaf(cbc("LineExtensionAmount"), "BT-131"), Leaf(cbc("AccountingCost"), "BT-133"),
-        Wrap(cac("InvoicePeriod"), [
+        Wrap(cac("InvoicePeriod"), marks="BG-26", children=[
             Leaf(cbc("StartDate"), "BT-134"), Leaf(cbc("EndDate"), "BT-135")]),
         Wrap(cac("OrderLineReference"), [Leaf(cbc("LineID"), "BT-132")]),
         Wrap(cac("DocumentReference"), [
@@ -416,7 +421,7 @@ def binding(kind: str) -> List[Entry]:
             when=document_type("130")),
         allowance_or_charge("BG-27", False, "BT-140", "BT-139", "BT-138", "BT-136", "BT-137"),
         allowance_or_charge("BG-28", True, "BT-145", "BT-144", "BT-143", "BT-141", "BT-142"),
-        Wrap(cac("Item"), [
+        Wrap(cac("Item"), marks="BG-31", children=[
             Leaf(cbc("Description"), "BT-154"), Leaf(cbc("Name"), "BT-153"),
             Wrap(cac("BuyersItemIdentification"), [Leaf(cbc("ID"), "BT-156")]),
             Wrap(cac("SellersItemIdentification"), [Leaf(cbc("ID"), "BT-155")]),
@@ -425,11 +430,11 @@ def binding(kind: str) -> List[Entry]:
             Wrap(cac("CommodityClassification"), [
                 Leaf(cbc("ItemClassificationCode"), "BT-158", ["listID", "listVersionID"])],
                 per="BT-158"),
-            Wrap(cac("ClassifiedTaxCategory"), [
+            Wrap(cac("ClassifiedTaxCategory"), marks="BG-30", children=[
                 Leaf(cbc("ID"), "BT-151"), Leaf(cbc("Percent"), "BT-152"), VAT_SCHEME]),
             Many(cac("AdditionalItemProperty"), "BG-32", [
                 Leaf(cbc("Name"), "BT-160"), Leaf(cbc("Value"), "BT-161")])]),
-        Wrap(cac("Price"), [
+        Wrap(cac("Price"), marks="BG-29", children=[
             Leaf(cbc("PriceAmount"), "BT-146"), Leaf(cbc("BaseQuantity"), "BT-149"),
             Wrap(cac("AllowanceCharge"), [
                 Fixed(cbc("ChargeIndicator"), "false", FALSE),
@@ -452,7 +457,7 @@ def binding(kind: str) -> List[Entry]:
                     Leaf(cbc("TaxExemptionReason"), "BT-120"), VAT_SCHEME])])],
             when=in_document_currency),
         Wrap(cac("TaxTotal"), [Leaf(cbc("TaxAmount"), "BT-111")], when=in_accounting_currency),
-        Wrap(cac("LegalMonetaryTotal"), [
+        Wrap(cac("LegalMonetaryTotal"), marks="BG-22", children=[
             Leaf(cbc("LineExtensionAmount"), "BT-106"),
             Leaf(cbc("TaxExclusiveAmount"), "BT-109"),
             Leaf(cbc("TaxInclusiveAmount"), "BT-112"),
@@ -560,14 +565,13 @@ def read_entry(node: Node, entry: Entry, group: Group, path: str, reading: Readi
                         "would be written back as that" % (qname(node.tag), node.text, entry.text))
     elif isinstance(entry, Wrap):
         read_children(node, entry.children, group, path, reading)
+        if entry.marks and not group.has(entry.marks):
+            group.present.add(entry.marks)      # there, with nothing held in it
     elif isinstance(entry, Many):
-        made = Group(entry.group)
+        # Kept even if nothing in it could be held: that it is there is
+        # something a rule can ask ("there is at least one VAT breakdown").
+        made = group.new(entry.group)
         read_children(node, entry.children, made, path, reading)
-        if not made.empty():
-            group.groups.setdefault(entry.group, []).append(made)
-        elif not node.children:
-            reading.say("warning", "EMPTY", path, "%s is empty, so there is nothing of it "
-                        "to hold" % qname(node.tag))
     elif isinstance(entry, Note):
         made = group.new("BG-1")
         value = read_value(node, "text", (), path, reading)
@@ -676,9 +680,10 @@ def build(entries: List[Entry], group: Group, document: Document,
             if entry.per:
                 for value in group.terms.get(entry.per, []):
                     made += wrapped(entry, build(entry.children, group, document,
-                                                 (entry.per, value), first))
+                                                 (entry.per, value), first), group)
             else:
-                made += wrapped(entry, build(entry.children, group, document, only, first))
+                made += wrapped(entry, build(entry.children, group, document, only, first),
+                                group)
         elif isinstance(entry, Many):
             instances = group.groups.get(entry.group, [])
             if not instances and any(isinstance(e, Leaf) and e.root and document.terms.get(e.term)
@@ -708,14 +713,16 @@ def build(entries: List[Entry], group: Group, document: Document,
     return made
 
 
-def wrapped(entry: Wrap, inside: List[Tuple[Node, bool]]) -> List[Tuple[Node, bool]]:
+def wrapped(entry: Wrap, inside: List[Tuple[Node, bool]], group: Group) -> List[Tuple[Node, bool]]:
     """A wrapper, if it has anything to hold. One that holds only what the
-    binding fixes is itself only fixed: `TaxScheme` with its `VAT`."""
-    if not inside:
-        return []
+    binding fixes is itself only fixed: `TaxScheme` with its `VAT`. One that
+    is a group of the standard's is written if that group was there, though
+    it held nothing."""
     node = Node(entry.tag)
     if all(fixed for _node, fixed in inside):
-        if not always(entry):
+        if entry.marks and entry.marks in group.present:
+            return [(node, False)]
+        if not inside or not always(entry):
             return []           # it has places for values, and there were none
         node.children = [child for child, _fixed in inside]
         return [(node, True)]
