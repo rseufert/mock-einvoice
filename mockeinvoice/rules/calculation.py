@@ -167,3 +167,26 @@ def xs_date(group: Group, term: str) -> Optional[int]:
         raise Incomputable("%s is %r, which is not a date" % (term, values[0].text))
     offset = hours * 60 + minutes
     return day.toordinal() * 1440 - (-offset if zone[0] == "-" else offset)
+
+
+def nudged(group: Group, term: str, by: int) -> Optional[Decimal]:
+    """`xs:decimal(cbc:X + 1)` in a rule's test, which is not the amount plus one.
+
+    An element in arithmetic is read as a double, so the sum is a double's
+    sum, and only then made a decimal: exactly the double it came to. 100.10
+    less one is a hair under 99.10 that way. The rules that allow a taxable
+    amount one unit of leeway are written like this, so at exactly one unit
+    they pass or fail by the double. This is the one place a binary float is
+    used, because the published test uses one.
+
+    None if the term is not there; twice, or not a number, is an XPath error.
+    """
+    values = doubles(group, term)
+    if not values:
+        return None
+    if len(values) > 1:
+        raise Incomputable("%s occurs %d times where the rule takes one" % (term, len(values)))
+    text = normalize_space(group.values(term)[0].text)
+    if values[0] is None or "INF" in text:
+        raise Incomputable("%s is %r, which no decimal can be made of" % (term, text))
+    return Decimal(float(text) + by)
