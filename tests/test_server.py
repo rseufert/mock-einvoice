@@ -441,9 +441,9 @@ class TheCommandLine(unittest.TestCase):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         running = subprocess.Popen(
             [sys.executable, "-m", "mockeinvoice", "--port", "0", "--quiet"],
-            cwd=root, stderr=subprocess.PIPE, universal_newlines=True)
+            cwd=root, stdout=subprocess.PIPE, universal_newlines=True)
         try:
-            said = running.stderr.readline()
+            said = running.stdout.readline()
             found = re.match(r"mock-einvoice \S+: a buyer and a supplier on (http://127\.0\.0\.1:\d+)$",
                              said.strip())
             self.assertTrue(found, said)
@@ -453,7 +453,7 @@ class TheCommandLine(unittest.TestCase):
         finally:
             running.terminate()
             running.wait(timeout=10)
-            running.stderr.close()
+            running.stdout.close()
 
 
 if __name__ == "__main__":

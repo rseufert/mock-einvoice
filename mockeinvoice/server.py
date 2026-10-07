@@ -45,7 +45,6 @@ import argparse
 import datetime
 import json
 import re
-import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -467,7 +466,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     supplier = Supplier(now=now, deliver=poster(asked.buyer_url) if asked.buyer_url else None)
     server = serve(buyer, asked.host, asked.port, asked.quiet, supplier)
     print("mock-einvoice %s: a buyer and a supplier on http://%s:%d"
-          % ((__version__,) + server.server_address[:2]), file=sys.stderr, flush=True)
+          % ((__version__,) + server.server_address[:2]), flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
