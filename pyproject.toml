@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mock-einvoice"
-version = "0.1.0"
+version = "0.2.0"
 description = "A mock e-invoicing partner: EN 16931 invoices in and out, with the responses that follow. Zero dependencies."
 readme = "README.md"
 requires-python = ">=3.8"
