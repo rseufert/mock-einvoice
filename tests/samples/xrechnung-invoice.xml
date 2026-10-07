@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</cbc:CustomizationID>
+  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
+  <cbc:ID>GLX-4711</cbc:ID>
+  <cbc:IssueDate>2026-10-02</cbc:IssueDate>
+  <cbc:DueDate>2026-11-01</cbc:DueDate>
+  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+  <cbc:Note>#AAI#Goods remain ours until paid for.</cbc:Note>
+  <cbc:Note>Thank you for the order.</cbc:Note>
+  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+  <cbc:BuyerReference>04011000-12345-06</cbc:BuyerReference>
+  <cac:OrderReference>
+    <cbc:ID>4500000017</cbc:ID>
+  </cac:OrderReference>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cbc:EndpointID schemeID="0088">4012345000009</cbc:EndpointID>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="0088">4012345000009</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="SEPA">DE98ZZZ09999999999</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name>Globex</cbc:Name>
+      </cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>Industriestrasse 1</cbc:StreetName>
+        <cbc:CityName>Hamburg</cbc:CityName>
+        <cbc:PostalZone>20095</cbc:PostalZone>
+        <cac:Country>
+          <cbc:IdentificationCode>DE</cbc:IdentificationCode>
+        </cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>DE123456789</cbc:CompanyID>
+        <cac:TaxScheme>
+          <cbc:ID>VAT</cbc:ID>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>22/333/44444</cbc:CompanyID>
+        <cac:TaxScheme>
+          <cbc:ID>FC</cbc:ID>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>Globex GmbH</cbc:RegistrationName>
+        <cbc:CompanyID schemeID="0204">HRB 12345</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+      <cac:Contact>
+        <cbc:Name>Accounts receivable</cbc:Name>
+        <cbc:Telephone>+49 40 000000</cbc:Telephone>
+        <cbc:ElectronicMail>ar@globex.example</cbc:ElectronicMail>
+      </cac:Contact>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cbc:EndpointID schemeID="0088">4098765000004</cbc:EndpointID>
+      <cac:PostalAddress>
+        <cbc:StreetName>Hauptstrasse 5</cbc:StreetName>
+        <cbc:CityName>Berlin</cbc:CityName>
+        <cbc:PostalZone>10115</cbc:PostalZone>
+        <cac:Country>
+          <cbc:IdentificationCode>DE</cbc:IdentificationCode>
+        </cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>DE987654321</cbc:CompanyID>
+        <cac:TaxScheme>
+          <cbc:ID>VAT</cbc:ID>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>ACME Corporation</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:Delivery>
+    <cbc:ActualDeliveryDate>2026-09-30</cbc:ActualDeliveryDate>
+  </cac:Delivery>
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode name="Credit transfer">30</cbc:PaymentMeansCode>
+    <cbc:PaymentID>GLX-4711</cbc:PaymentID>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>DE02120300000000202051</cbc:ID>
+      <cbc:Name>Globex GmbH</cbc:Name>
+      <cac:FinancialInstitutionBranch>
+        <cbc:ID>BYLADEM1001</cbc:ID>
+      </cac:FinancialInstitutionBranch>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
+  <cac:PaymentTerms>
+    <cbc:Note>30 days net</cbc:Note>
+  </cac:PaymentTerms>
+  <cac:AllowanceCharge>
+    <cbc:ChargeIndicator>true</cbc:ChargeIndicator>
+    <cbc:AllowanceChargeReason>Freight</cbc:AllowanceChargeReason>
+    <cbc:Amount currencyID="EUR">10.00</cbc:Amount>
+    <cac:TaxCategory>
+      <cbc:ID>S</cbc:ID>
+      <cbc:Percent>19</cbc:Percent>
+      <cac:TaxScheme>
+        <cbc:ID>VAT</cbc:ID>
+      </cac:TaxScheme>
+    </cac:TaxCategory>
+  </cac:AllowanceCharge>
+  <cac:AllowanceCharge>
+    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
+    <cbc:AllowanceChargeReasonCode>95</cbc:AllowanceChargeReasonCode>
+    <cbc:AllowanceChargeReason>Discount</cbc:AllowanceChargeReason>
+    <cbc:MultiplierFactorNumeric>1</cbc:MultiplierFactorNumeric>
+    <cbc:Amount currencyID="EUR">10.00</cbc:Amount>
+    <cbc:BaseAmount currencyID="EUR">1000.00</cbc:BaseAmount>
+    <cac:TaxCategory>
+      <cbc:ID>S</cbc:ID>
+      <cbc:Percent>19</cbc:Percent>
+      <cac:TaxScheme>
+        <cbc:ID>VAT</cbc:ID>
+      </cac:TaxScheme>
+    </cac:TaxCategory>
+  </cac:AllowanceCharge>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="EUR">190.00</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="EUR">1000.00</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="EUR">190.00</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:ID>S</cbc:ID>
+        <cbc:Percent>19</cbc:Percent>
+        <cac:TaxScheme>
+          <cbc:ID>VAT</cbc:ID>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="EUR">1000.00</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="EUR">1000.00</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="EUR">1190.00</cbc:TaxInclusiveAmount>
+    <cbc:AllowanceTotalAmount currencyID="EUR">10.00</cbc:AllowanceTotalAmount>
+    <cbc:ChargeTotalAmount currencyID="EUR">10.00</cbc:ChargeTotalAmount>
+    <cbc:PayableAmount currencyID="EUR">1190.00</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  <cac:InvoiceLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="C62">40</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="EUR">800.00</cbc:LineExtensionAmount>
+    <cac:OrderLineReference>
+      <cbc:LineID>10</cbc:LineID>
+    </cac:OrderLineReference>
+    <cac:Item>
+      <cbc:Name>Widget</cbc:Name>
+      <cac:SellersItemIdentification>
+        <cbc:ID>W-100</cbc:ID>
+      </cac:SellersItemIdentification>
+      <cac:CommodityClassification>
+        <cbc:ItemClassificationCode listID="STI">31161500</cbc:ItemClassificationCode>
+      </cac:CommodityClassification>
+      <cac:CommodityClassification>
+        <cbc:ItemClassificationCode listID="CPV" listVersionID="2008">44531000</cbc:ItemClassificationCode>
+      </cac:CommodityClassification>
+      <cac:ClassifiedTaxCategory>
+        <cbc:ID>S</cbc:ID>
+        <cbc:Percent>19</cbc:Percent>
+        <cac:TaxScheme>
+          <cbc:ID>VAT</cbc:ID>
+        </cac:TaxScheme>
+      </cac:ClassifiedTaxCategory>
+      <cac:AdditionalItemProperty>
+        <cbc:Name>Colour</cbc:Name>
+        <cbc:Value>Grey</cbc:Value>
+      </cac:AdditionalItemProperty>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="EUR">20.00</cbc:PriceAmount>
+      <cbc:BaseQuantity unitCode="C62">1</cbc:BaseQuantity>
+    </cac:Price>
+  </cac:InvoiceLine>
+  <cac:InvoiceLine>
+    <cbc:ID>2</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="HUR">2.5</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="EUR">200.00</cbc:LineExtensionAmount>
+    <cac:AllowanceCharge>
+      <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
+      <cbc:AllowanceChargeReason>Introductory</cbc:AllowanceChargeReason>
+      <cbc:Amount currencyID="EUR">50.00</cbc:Amount>
+    </cac:AllowanceCharge>
+    <cac:Item>
+      <cbc:Description>Fitting on site &amp; hand-over</cbc:Description>
+      <cbc:Name>Installation</cbc:Name>
+      <cac:ClassifiedTaxCategory>
+        <cbc:ID>S</cbc:ID>
+        <cbc:Percent>19</cbc:Percent>
+        <cac:TaxScheme>
+          <cbc:ID>VAT</cbc:ID>
+        </cac:TaxScheme>
+      </cac:ClassifiedTaxCategory>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="EUR">100.00</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>
+</Invoice>

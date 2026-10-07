@@ -1,0 +1,2 @@
+# Published examples are kept byte for byte, whatever the platform.
+tests/samples/** -text
