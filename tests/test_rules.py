@@ -48,13 +48,10 @@ class TheEngine(unittest.TestCase):
         for layer, built in REGISTRY.items():
             self.assertLessEqual(set(built), set(published.LAYERS[layer]), layer)
 
-    def test_four_families_of_the_core_are_built_and_nothing_else_is_yet(self):
-        vat = ("BR-S-", "BR-Z-", "BR-E-", "BR-AE-", "BR-IC-", "BR-G-", "BR-O-", "BR-AF-",
-               "BR-AG-", "BR-B-")
-        expected = {i for i in published.EN16931
-                    if i.startswith(("BR-CO-", "BR-DEC-") + vat) or i[3:].isdigit()}
+    def test_all_of_the_core_but_the_rules_about_ubl_itself_is_built(self):
+        expected = {i for i in published.EN16931 if not i.startswith("UBL-")}
         self.assertEqual(set(REGISTRY["en16931"]), expected)
-        self.assertEqual(len(expected), 44 + 58 + 98)
+        self.assertEqual(len(expected), 44 + 58 + 98 + 23)
         self.assertEqual((REGISTRY["peppol"], REGISTRY["xrechnung"]), ({}, {}))
 
     def test_the_published_lists_are_the_sizes_the_sources_have(self):
@@ -99,12 +96,12 @@ class TheReport(unittest.TestCase):
         self.assertEqual(document.text("BT-1"), "GLX-4711")
         self.assertEqual((report.specification, report.findings, report.verdict),
                          ("peppol", [], "not judged"))
-        self.assertEqual(len(report.ran), 200)
+        self.assertEqual(len(report.ran), 223)
         self.assertEqual(sorted(report.not_built), ["en16931", "peppol"])
-        self.assertEqual(len(report.not_built["en16931"]), 979 - 200)
+        self.assertEqual(len(report.not_built["en16931"]), 979 - 223)
         self.assertEqual(len(report.not_built["peppol"]), 166)
         self.assertNotIn("BR-CO-10", report.not_built["en16931"])
-        self.assertEqual(report.not_built["en16931"]["BR-CL-01"], "fatal")
+        self.assertEqual(report.not_built["en16931"]["UBL-SR-01"], "fatal")
         fatal = sum(1 for flag in published.EN16931.values() if flag == "fatal") \
             + sum(1 for flag in published.PEPPOL.values() if flag == "fatal")
         built_fatal = sum(1 for i in REGISTRY["en16931"] if published.EN16931[i] == "fatal")

@@ -13,6 +13,15 @@ to the first of the published rules.
 
 ### Added
 
+- **The code list rules of the EN 16931 core** ([#10]): `BR-CL-01` to
+  `BR-CL-26`, 23 rules, which makes 223 built and leaves only the rules about
+  the UBL document itself. The lists are generated from the published rules
+  by `tools/code_lists.py` and kept exactly as published. They are under the
+  EUPL 1.2 and not this package's MIT: they are in one file,
+  `rules/codelists.py`, with the licence text beside it, in the wheel too.
+  Of the publisher's 48 unit test cases for them, 47 agree. The other is in
+  a credit note with an invoice's line in it, which the reader does not hold
+  and says so, and is counted apart.
 - **The VAT category rules of the EN 16931 core** ([#9]): 98 rules in ten
   families, one to a category code (`BR-S`, `BR-Z`, `BR-E`, `BR-AE`, `BR-IC`,
   `BR-G`, `BR-O`, `BR-AF`, `BR-AG`, `BR-B`), which makes 200 built. They are
@@ -81,6 +90,8 @@ to the first of the published rules.
 
 ### Fixed
 
+- The three sample documents named an item classification scheme, `CPV`,
+  that is not in the code list. The code list rule found it.
 - **A creditor identifier on the seller stays on the seller** ([#4]). `BT-90`
   has two places in UBL, the seller and the payee. It was written to the
   payee whenever the document had one, which moved it in a document that has
@@ -93,3 +104,4 @@ to the first of the published rules.
 [#4]: https://github.com/rseufert/mock-einvoice/issues/4
 [#8]: https://github.com/rseufert/mock-einvoice/issues/8
 [#9]: https://github.com/rseufert/mock-einvoice/issues/9
+[#10]: https://github.com/rseufert/mock-einvoice/issues/10

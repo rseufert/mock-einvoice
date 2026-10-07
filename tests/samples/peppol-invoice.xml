@@ -162,7 +162,7 @@
         <cbc:ItemClassificationCode listID="STI">31161500</cbc:ItemClassificationCode>
       </cac:CommodityClassification>
       <cac:CommodityClassification>
-        <cbc:ItemClassificationCode listID="CPV" listVersionID="2008">44531000</cbc:ItemClassificationCode>
+        <cbc:ItemClassificationCode listID="TST" listVersionID="2008">44531000</cbc:ItemClassificationCode>
       </cac:CommodityClassification>
       <cac:ClassifiedTaxCategory>
         <cbc:ID>S</cbc:ID>

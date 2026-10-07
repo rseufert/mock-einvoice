@@ -8,13 +8,14 @@ version = "0.1.0.dev0"
 description = "A mock e-invoicing partner: EN 16931 invoices in and out, with the responses that follow. Zero dependencies."
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
+license = { text = "MIT AND EUPL-1.2" }
 keywords = ["e-invoicing", "en16931", "ubl", "peppol", "xrechnung", "invoice",
             "mock", "testing"]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.8",
@@ -36,8 +37,13 @@ Repository = "https://github.com/rseufert/mock-einvoice"
 Issues = "https://github.com/rseufert/mock-einvoice/issues"
 Changelog = "https://github.com/rseufert/mock-einvoice/blob/main/CHANGELOG.md"
 
-# Only the package goes in the wheel, and the package is MIT. The sdist also
+# Only the package goes in the wheel. The package is MIT but for one file,
+# `rules/codelists.py`: the code lists of the published EN 16931 rules, which
+# are under the EUPL 1.2 and go with its text beside them. The sdist also
 # carries the tests and the published examples they read, which are under
 # their own licences: see tests/samples/external.
 [tool.setuptools]
 packages = ["mockeinvoice", "mockeinvoice.rules"]
+
+[tool.setuptools.package-data]
+"mockeinvoice.rules" = ["LICENSE-EUPL-1.2.txt"]
