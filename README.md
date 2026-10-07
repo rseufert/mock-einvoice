@@ -88,9 +88,9 @@ xml = write_response(response)
 response, report = validate_response(xml)
 ```
 
-It is Peppol's transaction T111, a UBL `ApplicationResponse`, pinned to release 3.0.17 at commit [`ad6828c`](https://github.com/OpenPEPPOL/poacc-upgrade-3/commit/ad6828c94f8090bdfd620df4e48b213977afa2cb) of `OpenPEPPOL/poacc-upgrade-3` (it has no tag; the newest tag is 3.0.15). Of its 82 published rules, 81 are built. Fifty-four of the 82 are generated when Peppol builds its rule file and are in no file of its repository, so their identifiers are taken from the file Peppol publishes.
+It is Peppol's transaction T111, a UBL `ApplicationResponse`, pinned to release 3.0.17 at commit [`ad6828c`](https://github.com/OpenPEPPOL/poacc-upgrade-3/commit/ad6828c94f8090bdfd620df4e48b213977afa2cb) of `OpenPEPPOL/poacc-upgrade-3` (it has no tag; the newest tag is 3.0.15). All 82 of its published rules are built. Fifty-four of them are generated when Peppol builds its rule file and are in no file of its repository, so their identifiers are taken from the file Peppol publishes.
 
-**No response's verdict is `valid` yet.** The one rule not built, `PEPPOL-T111-B04201`, holds the type code of the document answered to UNTDID 1001, a list of 728 codes that is not in this package. Until it is, a response with nothing found wrong is `not judged`.
+A response with nothing found wrong is `valid`.
 
 XRechnung has no such message: an XRechnung invoice gets a verdict and nothing after it.
 
@@ -147,6 +147,7 @@ A group with nothing in it is still there: an empty `TaxSubtotal` is a VAT break
 - **XRechnung publishes no unit tests of its rules** in the form EN 16931 and Peppol do. Thirty-one of its 34 standard rules are the same tests as Peppol's rules for Germany, which Peppol does publish unit tests for, and are one piece of code here under two names; the other three rest on this project's tests. The documents of its test suite that this project carries are valid ones, and are all valid here; none of them shows a rule failing.
 - **XRechnung's rules are asked of every XRechnung document**, whatever its parties' countries; Peppol's for Germany only where both are in Germany. `BR-TMP-6` asks that a date looks like `YYYY-MM-DD` and no more, so the thirtieth of February passes it.
 - **Peppol's rules for Germany are asked only where seller and buyer are both in Germany.** A German seller invoicing a buyer abroad is asked none of them. Its IBAN checks (`DE-R-019`, `DE-R-020`) are warnings, asked of SEPA transfers and direct debits only, and read a small letter in an IBAN as another number than its capital. A cash discount line in the payment terms has to end in a line break (`DE-R-018`). All as published.
+- **A response to an invoice of type 817, 875, 876 or 877 fails a rule.** `PEPPOL-T111-B04201` holds the type code of the document answered to UNTDID 1001 as it was in 2017 (edition D.17A), which has not those four codes; Peppol's billing rules allow all four. The same list has one entry that is no code, `1999`, a year out of the description of code 423, so a type code of `1999` passes. Both are Peppol's list as published, and are built as published.
 - **`PEPPOL-T111-R005` cannot fail.** It is meant to say that the reason "partially paid" goes only with the response "paid". Its published test asks whether a comparison exists, and one always does. Built as published, it finds nothing.
 - **An element with no place in an Invoice Response is fatal**, where in an invoice it is a warning; but a second note is not, because the response's rules say what may be there and not how often. The reader reports the repeat.
 - **Four rules are published twice.** `BR-CO-21` to `BR-CO-24` have the same test as `BR-33`, `BR-38`, `BR-42` and `BR-44`, so an allowance or charge with no reason fails two rules, as it does in a real validator.
@@ -172,7 +173,7 @@ The rules, the reader and the writer are tested against files this project did n
 - **A disagreement is a failure here** until the published rule shows the case to be wrong; then it is listed in `tests/upstream.py` by name, with the reason. None is.
 - **To read the counts:** `python -m tests.upstream`. CI prints them on every run.
 
-Peppol's files are not in this repository (see Licences). `python tools/fetch_peppol.py` fetches the 101 listed in `tools/peppol-files.tsv` (billing's examples, its unit tests, and the rule file itself, which a test reads Peppol's code lists from) and the 27 in `tools/peppol-response-files.tsv` (the Invoice Response's examples, unit tests, hand-written rules, code lists and the description of its structure) from the pinned commit, checks each against the git hash listed for it, and puts them where the tests look. Without them those two tests are skipped and say so. CI fetches them on two of its jobs.
+Peppol's files are not in this repository (see Licences). `python tools/fetch_peppol.py` fetches the 101 listed in `tools/peppol-files.tsv` (billing's examples, its unit tests, and the rule file itself, which a test reads Peppol's code lists from) and the 28 in `tools/peppol-response-files.tsv` (the Invoice Response's examples, unit tests, hand-written rules, code lists and the description of its structure) from the pinned commit, checks each against the git hash listed for it, and puts them where the tests look. Without them those two tests are skipped and say so. CI fetches them on two of its jobs.
 
 Two things were checked while building and are not tests, because their sources are not here:
 
@@ -180,6 +181,8 @@ Two things were checked while building and are not tests, because their sources 
 - Its order agrees with the UBL 2.1 schemas from OASIS, for both documents and every aggregate under them.
 
 ## Licences
+
+The code values of UNTDID 1001, the United Nations' list of kinds of document, are in `mockeinvoice/rules/untdid.py`: 727 numbers from edition D.17A as UNECE publishes it, and none of the names or descriptions, which are the United Nations'. The directory's pages say "Copyright United Nations, all rights reserved"; the numbers are taken to be facts and not text.
 
 Nothing of Peppol's is in the package. Its rules are written here by hand from reading the tests, each under its published identifier and in this project's words. Where a Peppol rule holds a value to a code list, the list is the EN 16931 one already in the package, with the differences named: one currency code, twenty-one electronic address schemes, and two short lists of document type codes. A test compares the result with Peppol's own lists whenever its files have been fetched.
 

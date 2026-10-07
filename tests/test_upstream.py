@@ -186,7 +186,7 @@ class TheRulesAndTheirPublishersUnitTests(unittest.TestCase):
         _name, repository, commit, files, _target = tool.SETS[1]
         self.assertEqual(repository, "OpenPEPPOL/poacc-upgrade-3")
         self.assertIn(commit, published.SOURCES["peppol-response"][1])
-        self.assertEqual(len(list(tool.listed(files))), 27)
+        self.assertEqual(len(list(tool.listed(files))), 28)
         self.assertIn(tool.COMMIT, published.SOURCES["peppol"][1])
 
 

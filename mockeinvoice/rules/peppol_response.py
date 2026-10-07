@@ -12,12 +12,10 @@ Eighty-two are published, in three kinds.
   identifiers by their scheme, which are the tests Peppol has for an invoice
   and are the same code (`peppol.py`).
 
-One is not built: `PEPPOL-T111-B04201` holds the type code of the document
-answered to UNTDID 1001, a list of 728 codes that is not in this package.
-Until it is, no response's verdict is `valid`.
-
 Written by hand from reading the tests; nothing is copied from Peppol's rule
-file. The three short code lists are in `response.py` with their meanings.
+file. The three short code lists are in `response.py` with their meanings,
+and the long one, UNTDID 1001, is in `untdid.py` from the United Nations'
+own directory.
 
 What the published tests say that one might not expect
 ------------------------------------------------------
@@ -31,6 +29,13 @@ What the published tests say that one might not expect
 - **An element with no place in a response is fatal** (the `B` rules that
   say "no other element here"), where in an invoice it is a warning. But a
   second `cbc:Note` is not: the rules name what may be there, not how often.
+- **The type code of the document answered is held to an old edition of
+  the list, with a year in it** (`B04201`). Peppol's list is UNTDID 1001 as
+  of 2017, which has not the codes 817, 875, 876 and 877 that Peppol's own
+  billing rules allow an invoice: a response to such an invoice fails this
+  rule. And
+  it has one entry that is no code, `1999`, a year from the description of
+  code 423, which therefore passes. Both are built as published.
 - **`schemaLocation` on the root is asked twice**, as a warning
   (`PEPPOL-COMMON-R003`) and as fatal (`PEPPOL-T111-B00108`).
 """
@@ -45,6 +50,7 @@ from .calculation import Incomputable, date_of, normalize_space
 from .codelists import LISTS
 from .peppol import ADDRESS_SCHEMES, OTHERS, SCHEMES, by_scheme, codes, named
 from .tree import At, elements, texts
+from .untdid import DOCUMENT_NAME_CODES
 
 t111 = functools.partial(rule, "peppol-response", over="tree")
 
@@ -150,6 +156,10 @@ BASIC: Tuple[Tuple[str, str, object], ...] = (
     ("03602", STATUS + "/cac:Condition", "*"),
     ("03901", REFERENCE, "cbc:ID"), ("03902", REFERENCE, "cbc:DocumentTypeCode"),
     ("03903", REFERENCE, "*"),
+    # UNTDID 1001 as Peppol has it: edition D.17A, and `1999`, which is in
+    # Peppol's list and is no code of the United Nations'.
+    ("04201", REFERENCE + "/cbc:DocumentTypeCode", (
+        "", DOCUMENT_NAME_CODES | {"1999"}, "a UNTDID 1001 document name code")),
     ("04301", ISSUER, "cac:PartyName"), ("04302", ISSUER, "*"),
     ("04401", ISSUER + "/cac:PartyIdentification", "cbc:ID"),
     ("04501", ISSUER + "/cac:PartyIdentification/cbc:ID", ("schemeID",) + ISO6523),
@@ -159,7 +169,6 @@ BASIC: Tuple[Tuple[str, str, object], ...] = (
     ("05101", RECIPIENT + "/cac:PartyIdentification/cbc:ID", ("schemeID",) + ISO6523),
     ("05301", RECIPIENT + "/cac:PartyName", "cbc:Name"),
 )
-# Not built: B04201, the answered document's type code in UNTDID 1001.
 
 for _number, _path, _what in BASIC:
     _identifier = "PEPPOL-T111-B" + _number

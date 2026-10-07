@@ -9,6 +9,7 @@ from mockeinvoice import (Refused, Response, read_response, response, validate_r
 from mockeinvoice.model import Value
 from mockeinvoice.rules import REGISTRY, check_response, published, run
 from mockeinvoice.rules import peppol_response as rules
+from mockeinvoice.rules import untdid
 from mockeinvoice.ubl import tree
 
 from . import sample, upstream
@@ -183,20 +184,20 @@ class Writing(unittest.TestCase):
 
 
 class WhatIsBuilt(unittest.TestCase):
-    def test_81_of_the_82_published_rules(self):
+    def test_all_82_published_rules(self):
         self.assertEqual(len(ALL), 82)
-        self.assertEqual(sorted(set(ALL) - set(REGISTRY["peppol-response"])), ["PEPPOL-T111-B04201"])
+        self.assertEqual(sorted(REGISTRY["peppol-response"]), ALL)
         kinds = {kind: sum(1 for i in ALL if i.startswith(kind))
                  for kind in ("PEPPOL-T111-B", "PEPPOL-T111-R", "PEPPOL-COMMON-")}
         self.assertEqual(kinds, {"PEPPOL-T111-B": 54, "PEPPOL-T111-R": 8, "PEPPOL-COMMON-": 20})
         flags = [published.PEPPOL_RESPONSE[i] for i in ALL]
         self.assertEqual((flags.count("fatal"), flags.count("warning")), (71, 11))
 
-    def test_the_sample_fails_none_and_waits_on_the_one_that_is_not_built(self):
+    def test_the_sample_fails_none_and_is_valid(self):
         _held, report = validate_response(SAMPLE)
-        self.assertEqual((report.findings, report.verdict), ([], "not judged"))
-        self.assertEqual(report.not_built, {"peppol-response": {"PEPPOL-T111-B04201": "fatal"}})
-        self.assertEqual(len(report.ran), 81)
+        self.assertEqual((report.findings, report.verdict), ([], "valid"))
+        self.assertEqual(report.not_built, {"peppol-response": {}})
+        self.assertEqual(len(report.ran), 82)
         self.assertEqual(report.specification, "peppol-response")
 
     def test_a_finding_is_where_in_the_response_and_links_to_peppols_rules(self):
@@ -381,6 +382,48 @@ class TheStructure(unittest.TestCase):
                                                    "</cbc:Other>")), ["PEPPOL-T111-B05001"])
 
 
+class TheDocumentAnswered(unittest.TestCase):
+    """Its type code, held to UNTDID 1001 as Peppol has it."""
+
+    def typed(self, code: str) -> list:
+        return failing(changed(SAMPLE, "<cbc:DocumentTypeCode>380", "<cbc:DocumentTypeCode>" + code))
+
+    def test_the_list_is_727_numbers_in_38_runs(self):
+        self.assertEqual(len(untdid.DOCUMENT_NAME_CODES), 727)
+        self.assertEqual(len(untdid.RUNS_1001_D17A), 38)
+        runs = untdid.RUNS_1001_D17A
+        self.assertTrue(all(first <= last for first, last in runs))
+        self.assertTrue(all(runs[i][1] + 1 < runs[i + 1][0] for i in range(len(runs) - 1)))
+        self.assertEqual((runs[0], runs[-1]), ((1, 470), (998, 998)))
+
+    def test_a_code_of_the_list_passes_and_another_number_does_not(self):
+        for code in ("380", "381", "1", "470", " 380\n", "998", "751", "326", "384", "389"):
+            self.assertEqual(self.typed(code), [], code)
+        for code in ("0", "471", "480", "492", "999", "1000", "0380", "380.0", "invoice", "38 0"):
+            self.assertEqual(self.typed(code), ["PEPPOL-T111-B04201"], code)
+
+    def test_four_invoice_types_peppols_billing_allows_are_not_in_it(self):
+        from mockeinvoice.rules.peppol import CREDIT_NOTE_TYPES, INVOICE_TYPES
+        missing = sorted(code for code in INVOICE_TYPES | CREDIT_NOTE_TYPES
+                         if code not in untdid.DOCUMENT_NAME_CODES)
+        self.assertEqual(missing, ["817", "875", "876", "877"])
+        for code in missing:
+            self.assertEqual(self.typed(code), ["PEPPOL-T111-B04201"], code)
+
+    def test_a_year_that_is_in_peppols_list_passes(self):
+        self.assertNotIn("1999", untdid.DOCUMENT_NAME_CODES)
+        self.assertEqual(self.typed("1999"), [])
+        self.assertEqual(self.typed("2017"), ["PEPPOL-T111-B04201"])
+
+    def test_where_it_is_and_that_it_is_fatal(self):
+        _held, report = validate_response(changed(SAMPLE, "<cbc:DocumentTypeCode>380",
+                                                  "<cbc:DocumentTypeCode>875"))
+        self.assertEqual([(f.level, f.code, f.path) for f in report.findings], [
+            ("fatal", "PEPPOL-T111-B04201", "/ApplicationResponse/cac:DocumentResponse/"
+                                            "cac:DocumentReference/cbc:DocumentTypeCode")])
+        self.assertEqual(report.verdict, "invalid")
+
+
 class WhatPeppolAsksOfEveryDocument(unittest.TestCase):
     def test_no_empty_element(self):
         self.assertEqual(found(changed(SAMPLE, "<cbc:IssueTime>09:30:00</cbc:IssueTime>",
@@ -470,7 +513,8 @@ class PeppolsOwnFiles(unittest.TestCase):
             self.assertEqual(leaves(write_response(held)), leaves(data), name)
             _held, report = validate_response(data)
             self.assertEqual(report.findings, [], name)
-            self.assertEqual(list(report.not_built["peppol-response"]), ["PEPPOL-T111-B04201"])
+            self.assertEqual((report.not_built, report.verdict),
+                             ({"peppol-response": {}}, "valid"), name)
             codes.append(held.code)
         self.assertEqual(len(codes), 14)
         self.assertEqual(sorted(set(codes)), ["AP", "CA", "IP", "PD", "RE", "UQ"])
@@ -480,6 +524,14 @@ class PeppolsOwnFiles(unittest.TestCase):
         self.assertEqual(disagreements, [])
         self.assertEqual(dict(counts), {"files": 3, "cases": 13, "expectations": 13, "agree": 13})
         self.assertEqual(not_built, {})
+
+    def test_its_document_type_codes_are_the_united_nations_of_2017_and_a_year(self):
+        root = ET.parse(os.path.join(FETCHED, "structure", "codelist", "UNCL1001.xml")).getroot()
+        theirs = {e.text.strip() for e in root.iter() if e.tag.endswith("}Id")}
+        self.assertEqual(len(theirs), 728)
+        self.assertEqual(theirs - untdid.DOCUMENT_NAME_CODES, {"1999"})
+        self.assertEqual(untdid.DOCUMENT_NAME_CODES - theirs, set())
+        self.assertIn("D.17A", [e.text for e in root if e.tag.endswith("}Version")])
 
     def test_the_lists_here_are_its_lists(self):
         def listed(name):
