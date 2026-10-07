@@ -8,10 +8,23 @@ says so where it does.
 
 ## [Unreleased]
 
-Nothing is released yet. What is here reads and writes invoices and holds them
-to every rule of the EN 16931 core, to Peppol's own rules and its rules for
-Germany, and to XRechnung's; and over HTTP it is a buyer that takes them in
-and answers, and a supplier that sends them.
+Nothing yet.
+
+## [0.1.0] - 2026-10-07
+
+The first release. It reads and writes UBL invoices and credit notes and
+holds them to every rule of the EN 16931 core, to Peppol's own rules and its
+rules for Germany, and to XRechnung's; it reads, writes and holds the Peppol
+Invoice Response; and over HTTP it is a buyer that takes invoices in and
+answers them, and a supplier that sends them and takes the answers.
+
+Not in it: Peppol's rules for sellers in seven other countries ([#18]), whose
+documents are "not judged" and are not taken in by the server; CII, XRechnung
+Extension and ZUGFeRD, which are refused by name; any real transport; and
+any tie to mock-sap, which is for mock-acme to make.
+
+What is under "Fixed" was found and fixed while this release was being
+built, and was in no release.
 
 ### Added
 
@@ -190,6 +203,7 @@ and answers, and a supplier that sends them.
 [#11]: https://github.com/rseufert/mock-einvoice/issues/11
 [#16]: https://github.com/rseufert/mock-einvoice/issues/16
 [#17]: https://github.com/rseufert/mock-einvoice/issues/17
+[#18]: https://github.com/rseufert/mock-einvoice/issues/18
 [#19]: https://github.com/rseufert/mock-einvoice/issues/19
 [#23]: https://github.com/rseufert/mock-einvoice/issues/23
 [#25]: https://github.com/rseufert/mock-einvoice/issues/25

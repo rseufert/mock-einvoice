@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mock-einvoice"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "A mock e-invoicing partner: EN 16931 invoices in and out, with the responses that follow. Zero dependencies."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -12,7 +12,7 @@ license = { text = "MIT AND EUPL-1.2" }
 keywords = ["e-invoicing", "en16931", "ubl", "peppol", "xrechnung", "invoice",
             "mock", "testing"]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
