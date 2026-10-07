@@ -3,8 +3,12 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+dist-again/
 .venv/
 *.db
 *.db-wal
 *.db-shm
 .coverage
+
+# Peppol's test files, fetched by tools/fetch_peppol.py and never committed.
+tests/samples/fetched/

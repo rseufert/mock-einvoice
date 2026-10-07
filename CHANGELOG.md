@@ -26,6 +26,20 @@ to the first of the published rules.
   flag. A report says which ran and which did not, and a document's verdict
   is `invalid` or `not judged`. It is not `valid` while a fatal rule of its
   specification is unbuilt.
+- **The rules held to their publishers' own unit tests** ([#4]). The EN 16931
+  unit tests are in the repository, under their own licence, and are a test:
+  1,137 cases, of which the 148 for rules that are built all agree. A case
+  for a rule that is not built is compared with nothing and never counted as
+  agreeing, and `python -m tests.upstream` prints the counts.
+- **The XRechnung test suite's UBL documents** ([#4]), under their own
+  licence: its 39 valid documents are read with nothing to say, written back
+  element for element and fail no built rule, and its Extension and CVD
+  documents are refused by name.
+- **Peppol's examples and unit tests are fetched, not carried** ([#4]),
+  because Peppol does not allow them to be redistributed.
+  `tools/fetch_peppol.py` fetches the files listed for the pinned commit and
+  checks each against its git hash; the tests that need them are skipped
+  without them, and nothing of Peppol's is in what is shipped.
 - **A group with nothing in it is still there** ([#3]). An empty VAT breakdown
   is a VAT breakdown, an invoicing period with no dates is an invoicing
   period: the published rules ask whether they exist, so the model can say.
@@ -48,5 +62,15 @@ to the first of the published rules.
   other than Peppol BIS Billing 3.0 and XRechnung 3.0, with the XRechnung
   Extension and CVD identifiers named as such.
 
+### Fixed
+
+- **A creditor identifier on the seller stays on the seller** ([#4]). `BT-90`
+  has two places in UBL, the seller and the payee. It was written to the
+  payee whenever the document had one, which moved it in a document that has
+  a payee and keeps the identifier on the seller: the XRechnung test suite
+  has one. Each value now notes if it was the payee's and is written back
+  where it was read. Not in any release.
+
 [#2]: https://github.com/rseufert/mock-einvoice/issues/2
 [#3]: https://github.com/rseufert/mock-einvoice/issues/3
+[#4]: https://github.com/rseufert/mock-einvoice/issues/4

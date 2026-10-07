@@ -1,3 +1,5 @@
 include LICENSE README.md CHANGELOG.md
 recursive-include tests *.py *.md *.txt *.xml
-recursive-include tools *.py
+recursive-include tools *.py *.tsv
+# Peppol's test files are fetched, never carried: tools/fetch_peppol.py.
+prune tests/samples/fetched

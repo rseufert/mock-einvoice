@@ -29,6 +29,7 @@ xml = write(document)               # UBL again, in the schema's order
 - **Decimals.** Every amount, quantity, price and percentage is a `decimal.Decimal` made from the text as written. `10.50` stays `10.50`. There is no float anywhere, and making a value from one is a `TypeError`.
 - **Groups that repeat are groups**: lines (`BG-25`), the VAT breakdown (`BG-23`), allowances and charges, notes, payment instructions, supporting documents. A group that occurs once (the seller, the totals) has its terms on the document or the line itself.
 - **Findings.** What the reader has to say about a document, each with a level, a code and the path it is about.
+- **One term, two places.** The bank assigned creditor identifier (`BT-90`) may be on the seller or the payee. It is one term here, each value noting if it was the payee's, and it is written back where it was read.
 
 ## The rules
 
@@ -104,22 +105,46 @@ A group with nothing in it is still there: an empty `TaxSubtotal` is a VAT break
 - **A tax category's scheme is taken to be VAT.** Several published rules look at a tax category only if its `TaxScheme/ID` is `VAT`. The reader reports any other value (`FIXED`) and holds the category all the same, so such a document is judged here as if it had said VAT.
 - **Six published rules cannot fail, here or anywhere.** `BR-CO-05` to `BR-CO-08` are published with the test `true()`. `BR-DEC-13` and `BR-DEC-15` compare a tax amount's currency with an element a tax amount does not have, so they select nothing and pass. They are built as published.
 - **A VAT rate under half a percent** rounds to nought in `BR-CO-17`, which then wants the tax to round to nought too. That is the published test, and it is built as published.
-- **The creditor identifier has two places and one term.** `BT-90` is a party identifier with scheme `SEPA`, on the payee or the seller. It is read from either and written to the payee if there is one. A document with one on each comes back with both on one party.
 - **A note's subject code** (`BT-21`) is read from `#CODE#` at the start of a note's text. That convention is from memory of the standard's UBL binding and was not checked against a published source.
 
-## How it was checked
+## Held to what others published
+
+The rules, the reader and the writer are tested against files this project did not write.
+
+| Source, at the pinned version | What | How it comes out today |
+| --- | --- | --- |
+| EN 16931 unit tests | 1,137 cases, each a small document and what one rule should make of it | 148 agree, none disagree. 979 are for the 181 rules with cases that are not built yet, and are compared with nothing. 12 name `BR-CO-25`, which the pinned rule file does not have. |
+| EN 16931 examples | 17 documents | read, written back, and compared element for element by a reader that is not this one |
+| XRechnung test suite | 39 valid XRechnung 3.0 documents | read with nothing to say, written back element for element, and no built rule fails |
+| XRechnung test suite | 5 Extension and 1 CVD document | refused by name |
+| Peppol unit tests | 400 cases | none of Peppol's rules is built: 396 are compared with nothing, and 4 are about a UBL Order |
+| Peppol examples | 10 documents | as XRechnung's valid ones |
+
+- **A case for a rule that is not built is never counted as agreeing.** The counts are written out in `tests/test_upstream.py`, so building a rule moves a number there on purpose.
+- **A disagreement is a failure here** until the published rule shows the case to be wrong; then it is listed in `tests/upstream.py` by name, with the reason. None is.
+- **To read the counts:** `python -m tests.upstream`. CI prints them on every run.
+
+Peppol's files are not in this repository (see Licences). `python tools/fetch_peppol.py` fetches the 100 listed in `tools/peppol-files.tsv` from the pinned commit, checks each against the git hash listed for it, and puts them where the tests look. Without them those two tests are skipped and say so. CI fetches them on two of its jobs.
+
+Two things were checked while building and are not tests, because their sources are not here:
 
 - The table of where each term sits agrees, term for term, with the syntax description Peppol publishes for BIS Billing 3.0.21, for both documents.
 - Its order agrees with the UBL 2.1 schemas from OASIS, for both documents and every aggregate under them.
-- The seventeen UBL examples published with the EN 16931 validation artefacts are read, written and compared element for element by a reader that is not this one. They are in `tests/samples/external/en16931`, unmodified, under their own licence.
-
-- The 44 rules agree with all 148 cases in the unit tests the EN 16931 artefacts publish for them (`test/Invoice-unit-UBL` and `test/CreditNote-unit-UBL`, `BR-CO-*`; there are none for `BR-DEC-*`). The first run disagreed on two, both about an empty VAT breakdown, and the reader was changed.
-
-The third is a test here. The others were checked while building and are not: those sources are not in this repository yet ([#4](https://github.com/rseufert/mock-einvoice/issues/4) brings in the unit tests).
 
 ## Licences
 
-The package is MIT. The examples under `tests/samples/external/` are not: each directory has a README naming where its files came from and the licence they are under. They are in the source distribution and not in the wheel.
+The package is MIT, and the wheel holds the package and nothing else.
+
+The files under `tests/samples/external/` are other people's, copied unmodified, each directory with the licence its files are under and a README saying where they came from. They are in the repository and the source distribution, which is about 5 MB because of them.
+
+| Directory | From | Licence |
+| --- | --- | --- |
+| `en16931/` | the EN 16931 validation artefacts, `validation-1.3.16` | EUPL 1.2 |
+| `xrechnung/` | the XRechnung test suite, `v2026-08-31` | Apache 2.0 |
+
+Peppol's examples and unit tests are **not** here. Peppol BIS Billing is published with a statement that it may not be redistributed without OpenPeppol's consent, so they are fetched for the tests and are in nothing this project ships. CI checks the source distribution for them.
+
+This is a reading of the licence texts by the people who wrote the code, not legal advice.
 
 ## Development
 

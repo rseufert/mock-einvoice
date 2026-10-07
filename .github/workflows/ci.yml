@@ -24,13 +24,16 @@ jobs:
       matrix:
         include:
           # 3.8 is not in the tool cache on ubuntu-latest any more
-          - {os: ubuntu-22.04, python: "3.8"}
+          # `peppol` fetches Peppol's test files, which the repository does not
+          # carry (tools/fetch_peppol.py), so the tests that need them run.
+          # On two of the jobs, not all: the rest say how many they skipped.
+          - {os: ubuntu-22.04, python: "3.8", peppol: true}
           - {os: ubuntu-latest, python: "3.9"}
           - {os: ubuntu-latest, python: "3.10"}
           - {os: ubuntu-latest, python: "3.11"}
           - {os: ubuntu-latest, python: "3.12"}
           - {os: ubuntu-latest, python: "3.13"}
-          - {os: ubuntu-latest, python: "3.14"}
+          - {os: ubuntu-latest, python: "3.14", peppol: true}
           - {os: macos-latest, python: "3.12"}
           - {os: windows-latest, python: "3.12"}
     steps:
@@ -40,8 +43,15 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Byte-compile every module
         run: python -m compileall -q mockeinvoice tests tools
+      - name: Fetch Peppol's test files
+        if: matrix.peppol
+        run: python tools/fetch_peppol.py
       - name: Run the tests
         run: python -X faulthandler -m unittest discover -s tests -t . -v
+      # In the log on every run: cases agreeing, disagreeing, and for rules
+      # not built. The same counts are a test; this is so they can be read.
+      - name: Say how the publishers' unit tests came out
+        run: python -m tests.upstream
 
   package:
     name: package builds and installs
@@ -82,9 +92,23 @@ jobs:
               tests/samples/peppol-invoice.xml \
               tests/samples/external/en16931/README.md \
               tests/samples/external/en16931/LICENSE-EUPL-1.2.txt \
-              tests/samples/external/en16931/ubl-tc434-example1.xml; do
+              tests/samples/external/en16931/ubl-tc434-example1.xml \
+              tests/samples/external/en16931/unit/Invoice-unit-UBL/BR-CO-10.xml \
+              tests/samples/external/xrechnung/README.md \
+              tests/samples/external/xrechnung/LICENSE-Apache-2.0.txt \
+              tests/samples/external/xrechnung/business-cases/standard/01.01a-INVOICE_ubl.xml \
+              tools/fetch_peppol.py tools/peppol-files.tsv; do
             grep -q "/$wanted\$" /tmp/sdist.txt || { echo "missing from the sdist: $wanted"; exit 1; }
           done
+      # Peppol's files may not be redistributed, so they are fetched for the
+      # tests and must never be in anything this project ships.
+      - name: Nothing of Peppol's is in the sdist
+        run: |
+          set -eu
+          python tools/fetch_peppol.py
+          rm -rf dist-again && python -m build --sdist --outdir dist-again
+          tar -tzf dist-again/*.tar.gz > /tmp/sdist-again.txt
+          ! grep -E "samples/fetched|unit-UBL-PEPPOL" /tmp/sdist-again.txt
       - name: The wheel carries the package and nothing else
         run: |
           set -eu

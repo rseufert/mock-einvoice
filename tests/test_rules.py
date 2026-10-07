@@ -484,6 +484,11 @@ class WhatTheTestsSayExactly(unittest.TestCase):
                                 "<cbc:ID>FC</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>"))
         # With no seller at all the rule has nothing to ask.
         self.assertNotIn("BR-CO-26", failing(invoice("<cbc:ID>1</cbc:ID>")))
+        # A payee's identifier is not the seller's, whatever case its scheme is in.
+        self.assertIn("BR-CO-26", failing(invoice(
+            "<cac:AccountingSupplierParty><cac:Party><cac:PartyName><cbc:Name>Globex</cbc:Name>"
+            "</cac:PartyName></cac:Party></cac:AccountingSupplierParty><cac:PayeeParty>%s"
+            "</cac:PayeeParty>" % (identifier % "sepa"))))
 
     def test_a_period_needs_a_date_and_the_documents_may_have_the_code_instead(self):
         def document(inside):

@@ -33,7 +33,7 @@ from __future__ import annotations
 import functools
 from typing import Iterator, List, Tuple
 
-from ..model import Document, Group
+from ..model import PARTY_ROLE, Document, Group
 from . import Failure, rule
 from .calculation import (Incomputable, cents, decimals_after_point, equal, minus, numbered,
                           one, plus, shown, total, xpath_round)
@@ -272,9 +272,9 @@ def br_co_26(document: Document) -> Iterator[Failure]:
     # The test takes any party identifier whose scheme is not exactly `SEPA`.
     # The reader files `sepa` in any case under the creditor identifier, so
     # one written in another case is looked for there, if it is the seller's.
-    sellers_own = not any(document.values(term) for term in ("BT-59", "BT-60", "BT-61"))
     other_case = [value for value in document.values("BT-90")
-                  if sellers_own and value.attributes.get("schemeID") != "SEPA"]
+                  if value.attributes.get(PARTY_ROLE) != "payee"
+                  and value.attributes.get("schemeID") != "SEPA"]
     if not (document.values("BT-29") or document.values("BT-30")
             or document.values("BT-31") or other_case):
         yield "BG-4", "it has none of them"
