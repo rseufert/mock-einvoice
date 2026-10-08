@@ -37,7 +37,7 @@ for line in document.all("BG-25"):  # the lines
 xml = write(document)               # UBL again, in the schema's order
 ```
 
-- **Terms by number.** `BT-1` is the invoice number in an invoice and in a credit note, whatever UBL calls the element. `mockeinvoice.model.TERMS` names all of them.
+- **Terms by number.** `BT-1` is the invoice number in an invoice and in a credit note, whatever UBL calls the element. `mockeinvoice.model.TERMS` names all of them, and the server gives the same table to a client that cannot import it: `GET /_mock/terms`.
 - **Decimals.** Every amount, quantity, price and percentage is a `decimal.Decimal` made from the text as written. `10.50` stays `10.50`. There is no float anywhere, and making a value from one is a `TypeError`.
 - **Groups that repeat are groups**: lines (`BG-25`), the VAT breakdown (`BG-23`), allowances and charges, notes, payment instructions, supporting documents. A group that occurs once (the seller, the totals) has its terms on the document or the line itself.
 - **Findings.** What the reader has to say about a document, each with a level, a code and the path it is about.
@@ -288,7 +288,16 @@ $ curl -s -X POST http://127.0.0.1:8101/_mock/orders/1/invoices
 | `GET /_mock/health` | that it is up, its version, and how many documents it holds and has sent |
 | `GET /_mock/turned-away` | what was not taken in, on which side, and why |
 | `POST /_mock/validate` | an invoice, a credit note or an Invoice Response held to its rules, and not kept |
+| `GET /_mock/terms` | the business terms and groups this package knows, by number: `{"terms": [{"id", "name", "group", "kind"}], "groups": [{"id", "name", "repeats", "inside", "terms"}]}`, 164 terms and 32 groups, in the standard's order |
+| `GET /_mock/terms/BT-13`, `/_mock/terms/BG-25` | one term or one group, as in the list. `404` `NO-SUCH-TERM` for anything else, written any other way (`bt-13`) |
 | `POST /_mock/reset` | forget every document and response, on both sides |
+
+**The terms are the package's own table, served.** `GET /_mock/terms` is made from `mockeinvoice.model.TERMS` and `GROUPS` when it is asked, so what a client reads is what the reader, the writer and the rules go by.
+
+- A term's `kind` is one of `amount`, `binary`, `code`, `date`, `identifier`, `percentage`, `price`, `quantity`, `text`. Its `group` is `null` where the standard puts it on the document itself.
+- A group's `repeats` says how this package holds it and not how often the standard allows it: `true` where it is kept as a group of its own (the lines, the VAT breakdown), `false` where its terms are held by the document or the line. `inside` is the group it is written within, if any.
+- Three terms are written as an attribute of another's element (`BT-130`, the unit, is `BT-129`'s `unitCode`) and say so in `attribute_of`. Sixteen more, the scheme identifiers and their like (`BT-29-1`), have a number and no entry of their own here: each is listed under `attributes` on the term that holds it, and asked for by itself is `404` saying where it is.
+- A finding still gives a term by its number alone. Its path is not always a term (a rule about the XML gives an XPath), and a client that wants the name has this to look it up in.
 
 To see the two sides talk, run two: a buyer with `--seller-url http://127.0.0.1:8101/responses`, and a supplier with `--buyer-url http://127.0.0.1:8100/invoices`.
 
@@ -390,6 +399,8 @@ Two things were checked while building and are not tests, because their sources 
 ## Licences
 
 The code values of UNTDID 1001, the United Nations' list of kinds of document, are in `mockeinvoice/rules/untdid.py`: 727 numbers from edition D.17A as UNECE publishes it, and none of the names or descriptions, which are the United Nations'. The directory's pages say "Copyright United Nations, all rights reserved"; the numbers are taken to be facts and not text.
+
+The names of the 164 business terms and 32 business groups in `mockeinvoice/model.py` are, by that file's own account, the standard's names for them, typed in by hand ("Invoice number", "Seller postal address"). None of the standard's descriptions or usage notes is there. They have been in the package since 0.1.0, and the server now gives them out as well (`GET /_mock/terms`).
 
 Nothing of Peppol's is in the package. Its rules are written here by hand from reading the tests, each under its published identifier and in this project's words. Where a Peppol rule holds a value to a code list, the list is the EN 16931 one already in the package, with the differences named: one currency code, twenty-one electronic address schemes, and two short lists of document type codes. A test compares the result with Peppol's own lists whenever its files have been fetched.
 

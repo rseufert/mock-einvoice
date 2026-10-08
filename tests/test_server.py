@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from mockeinvoice import __version__, validate_response
 from mockeinvoice.buyer import Buyer
+from mockeinvoice.model import catalogue
 from mockeinvoice.server import LARGEST, PORT, arguments, poster, serve
 from mockeinvoice.supplier import Supplier
 
@@ -158,7 +159,34 @@ class TheMocksSide(Served):
                          ("mock-einvoice", __version__, ["buyer", "supplier"], "required"))
         self.assertIn("POST /_mock/invoices/<id>/responses", body["paths"])
         self.assertIn("POST /_mock/orders/<id>/invoices", body["paths"])
-        self.assertEqual(len(body["paths"]), 25)
+        self.assertIn("GET /_mock/terms/<BT-n or BG-n>", body["paths"])
+        self.assertEqual(len(body["paths"]), 27)
+
+    def test_the_terms_are_the_packages_own_table(self):
+        status, _headers, body = self.call("GET", "/_mock/terms")
+        self.assertEqual((status, body), (200, catalogue()))
+        self.assertEqual((len(body["terms"]), len(body["groups"])), (164, 32))
+        self.assertEqual(self.call("GET", "/_mock/terms/BT-13")[::2], (200, {
+            "id": "BT-13", "name": "Purchase order reference", "group": None,
+            "kind": "identifier"}))
+        self.assertEqual(self.call("GET", "/_mock/terms/BT-129")[2]["attributes"],
+                         {"unitCode": "BT-130"})
+        status, _headers, body = self.call("GET", "/_mock/terms/BG-25")
+        self.assertEqual((status, body["name"], body["repeats"], body["terms"][:2]),
+                         (200, "Invoice line", True, ["BT-126", "BT-127"]))
+
+    def test_a_term_that_is_not_one(self):
+        for identifier, why in (
+                ("BT-4", "BT-4 is no business term or group known here"),
+                ("bt-13", "bt-13 is no business term or group known here"),
+                ("13", "13 is no business term"),
+                ("BG-33", "BG-33 is no business term"),
+                ("BT-29-1", "BT-29-1 is the schemeID of BT-29, and is listed there")):
+            status, _headers, body = self.call("GET", "/_mock/terms/" + identifier)
+            self.assertEqual((status, body["error"]), (404, "NO-SUCH-TERM"), identifier)
+            self.assertIn(why, body["reason"])
+        self.assertEqual(self.call("POST", "/_mock/terms", b"")[0], 405)
+        self.assertEqual(self.call("GET", "/_mock/terms/BT-13/name")[0], 404)
 
     def test_health_is_what_the_other_mocks_answer_too(self):
         self.call("POST", "/_mock/sent", INVOICE)

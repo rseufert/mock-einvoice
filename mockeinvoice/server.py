@@ -37,6 +37,8 @@ And both:
     GET   /_mock/health                 that it is up, and its version
     GET   /_mock/turned-away            what was not taken in, and why
     POST  /_mock/validate               a document held to its rules, and not kept
+    GET   /_mock/terms                  the business terms and groups, by number
+    GET   /_mock/terms/<BT-n or BG-n>   one of them
     POST  /_mock/reset                  forget everything
 
 None of this is Peppol's transport. A real invoice travels by AS4 between
@@ -61,7 +63,8 @@ from . import __version__
 from . import response as _response
 from . import specification as _specification
 from .buyer import ANSWERS, Buyer, Held, NotSaid, Sent, TurnedAway, not_run
-from .model import Finding, Refused
+from .model import (ATTRIBUTE_TERMS, Finding, Refused, catalogue, group_described,
+                    term_described)
 from .rules import Report, check, check_response
 from .order import NotTaken, Order
 from .supplier import Got, Issued, NotBilled, NotSent, Supplier
@@ -216,6 +219,8 @@ ROUTES: List[Tuple[str, "re.Pattern[str]", str]] = [
         ("GET", "/_mock/health", "health"),
         ("GET", "/_mock/turned-away", "turned_away"),
         ("POST", "/_mock/validate", "validate"),
+        ("GET", "/_mock/terms", "terms"),
+        ("GET", "/_mock/terms/([^/]+)", "term"),
         ("POST", "/_mock/reset", "reset"),
     )]
 
@@ -331,7 +336,8 @@ class Handler(BaseHTTPRequestHandler):
         self.json(200, {
             "mock": "mock-einvoice", "version": __version__, "sides": ["buyer", "supplier"],
             "answers": self.buyer.answers,
-            "paths": ["%s %s" % (method, pattern.pattern.strip("^$").replace(r"(\d+)", "<id>"))
+            "paths": ["%s %s" % (method, pattern.pattern.strip("^$").replace(r"(\d+)", "<id>")
+                                     .replace("([^/]+)", "<BT-n or BG-n>"))
                       for method, pattern, _name in ROUTES]})
 
     def invoices(self) -> None:
@@ -473,6 +479,21 @@ class Handler(BaseHTTPRequestHandler):
             self.json(200, validated(self.body()))
         except Refused as refused:
             raise Problem(400, refused.code, refused.reason)
+
+    def terms(self) -> None:
+        self.json(200, catalogue())
+
+    def term(self, identifier: str) -> None:
+        said = term_described(identifier) or group_described(identifier)
+        if said is None and identifier in ATTRIBUTE_TERMS:
+            raise Problem(404, "NO-SUCH-TERM", "%s is the %s of %s, and is listed there: it "
+                          "has no name of its own here"
+                          % ((identifier,) + ATTRIBUTE_TERMS[identifier][::-1]))
+        if said is None:
+            raise Problem(404, "NO-SUCH-TERM", "%s is no business term or group known here: "
+                          "they are written as BT-13 and BG-25, and GET /_mock/terms lists "
+                          "them" % identifier)
+        self.json(200, said)
 
     def behaviour(self) -> None:
         self.json(200, {"answers": self.buyer.answers})

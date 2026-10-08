@@ -8,8 +8,9 @@ says so where it does.
 
 ## [Unreleased]
 
-The supplier writes an invoice itself. Nothing changes for a document sent
-with `POST /_mock/sent`, but for one key more in what is said of it.
+The supplier writes an invoice itself, and the business terms can be read
+from the running mock. Nothing changes for a document sent with
+`POST /_mock/sent`, but for one key more in what is said of it.
 
 ### Added
 
@@ -31,12 +32,19 @@ with `POST /_mock/sent`, but for one key more in what is said of it.
   - Every line is VAT category `S` at the supplier's one rate. No allowances,
     charges, credit notes or XRechnung. The README lists what is made up, and
     from what.
+- **The business terms over HTTP** ([#34]). `GET /_mock/terms` gives every
+  business term and group the package knows (164 and 32), each with its
+  number, name and kind, and `GET /_mock/terms/BT-13` or `/BG-25` gives one.
+  It is made from `mockeinvoice.model.TERMS` and `GROUPS` when asked, so a
+  client that cannot import the package reads the same table. In Python,
+  `model.catalogue`, `term_described` and `group_described`. A finding still
+  names a term by number alone.
 
 ### Changed
 
 - **A document that was sent says which order it was written for**:
   `"order"` in `POST /_mock/sent`, `GET /_mock/sent` and `/_mock/sent/<id>`,
-  `null` for one that was given finished. `GET /` lists six paths more.
+  `null` for one that was given finished. `GET /` lists eight paths more.
 - A JSON number with a fraction in a request is read as the decimal it was
   written as, and not as a float. No request took such a number before.
 
@@ -277,3 +285,4 @@ built, and was in no release.
 [#25]: https://github.com/rseufert/mock-einvoice/issues/25
 [#27]: https://github.com/rseufert/mock-einvoice/issues/27
 [#33]: https://github.com/rseufert/mock-einvoice/issues/33
+[#34]: https://github.com/rseufert/mock-einvoice/issues/34
