@@ -9,11 +9,11 @@ python3 -m pip install mock-einvoice
 mock-einvoice --port 8100
 ```
 
-It reads and writes UBL invoices and credit notes, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to all 165 of Peppol's (its own 63, the 31 it has for Germany and the 71 for seven other countries), and to the 34 of a standard XRechnung document; responses to all 82 of theirs. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones, and a supplier that sends them and takes the answers.
+It reads and writes UBL invoices and credit notes, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to all 165 of Peppol's (its own 63, the 31 it has for Germany and the 71 for seven other countries), and to the 34 of a standard XRechnung document; responses to all 82 of theirs. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones, and a supplier that sends them, writes the invoice for an order it is told of, and takes the answers.
 
 **What 0.2.0 is not:**
 
-- **It writes no invoices of its own.** The supplier sends the documents it is given.
+- **It writes no invoices of its own.** The supplier sends the documents it is given. (Since 0.2.0, and not yet released: it writes the invoice for an order it is told of. See [An order, and the invoice for it](#an-order-and-the-invoice-for-it).)
 - **It knows nothing of the other mocks.** Writing an invoice from one of mock-sap's billing documents, and saying "paid" when SAP has cleared it, is integration, and belongs in [mock-acme](https://github.com/rseufert/mock-acme) with the rest of it. It is not built there yet.
 - **Peppol's ten rules for a seller in Iceland are held to this project's tests only.** Peppol publishes unit tests for its rules for Denmark, Greece, Italy, the Netherlands, Norway and Sweden, and every case agrees here; for Iceland it publishes none. Those ten were written from the same reading of the rule file as the tests that hold them, so a misreading would be in both.
 - **No CII, no XRechnung Extension, no ZUGFeRD**, and no transport: see [What it refuses](#what-it-refuses) and [Known to be wrong, or not real](#known-to-be-wrong-or-not-real).
@@ -217,7 +217,69 @@ $ curl -s --data-binary @tests/samples/peppol-invoice.xml http://127.0.0.1:8101/
 
 A document's `"status"` is the last thing its buyer said. **A response out of order is taken and ignored.** Peppol's guide says of a response that follows a rejection or a payment in full, or follows an acceptance with anything but paid, that the seller may ignore it. So the supplier does: the response is `201` and kept, marked `"ignored"` with the rule it broke, and the status does not move. The same for one that goes back in the order.
 
-The supplier writes no invoices. It sends what it is given.
+#### An order, and the invoice for it
+
+The supplier can be told of an order, and writes and sends the invoice for it itself.
+
+```
+$ curl -s -d '{"number": "4500000017",
+    "buyer": {"name": "ACME Corporation", "endpoint": "0088:4098765000003",
+              "city": "Berlin", "postal_code": "10115", "country": "DE"},
+    "lines": [{"line": "10", "name": "Widget", "quantity": 40, "unit": "C62", "price": "20.00"}]}' \
+    http://127.0.0.1:8101/_mock/orders
+{
+  "id": "1",
+  "number": "4500000017",
+  ...
+  "status": "open",
+  ...
+}
+$ curl -s -X POST http://127.0.0.1:8101/_mock/orders/1/invoices
+{
+  "id": "1",
+  "kind": "Invoice",
+  "number": "GLX-0001",
+  ...
+  "verdict": "valid",
+  "delivery": {
+    "to": "http://127.0.0.1:8100/invoices",
+    "status": 201
+  },
+  "order": "/_mock/orders/1",
+  ...
+}
+```
+
+| | |
+| --- | --- |
+| `POST /_mock/orders` | Tell the supplier of an order: `{"number", "reference", "buyer", "currency", "lines"}`. The buyer is `{"name", "endpoint", "vat", "legal_id", "street", "city", "postal_code", "country"}` and needs its name, its country, and its endpoint written `scheme:identifier`. A line is `{"line", "name", "seller_item", "buyer_item", "quantity", "unit", "price"}` and needs its name, a quantity above nought, a unit (a code of UN/ECE Recommendation 20: `C62` is "one") and a price for one unit, without VAT. A line with no number has its place in the order for one. `201` and it is held; nothing is billed. `400` for what it lacks or does not know. `422` `UNBILLABLE` with the findings where the invoice it would be billed with is not `valid`: the invoice is written and held to its rules when the order comes, and thrown away. |
+| `GET /_mock/orders`, `/_mock/orders/<id>` | the orders; one, with what is billed and what is open of each line, and the invoices sent for it |
+| `POST /_mock/orders/<id>/invoices` | Write the invoice for all that is not yet billed, and send it as `POST /_mock/sent` would: the answer is the same, and the document is at `/_mock/sent/<id>` with the rest. `{"lines": [{"line": "10", "quantity": 15}]}` bills that much of those lines and no more. `409` `OVER-BILLED` for more than is open of a line, `409` `BILLED` when nothing is. `422` `NOT-VALID` with the findings if the invoice is not `valid`, which can only be because the supplier was changed since the order came; it is not sent, nothing is counted as billed, and there is no forcing it. |
+| `GET`, `PATCH /_mock/supplier` | who the supplier is, and changing it: any of the fields below. `POST /_mock/reset` forgets the orders and starts the invoice numbers again, and leaves this alone. |
+
+**An order is JSON here, and not a document of any standard.** Peppol has one, the UBL `Order` of its ordering profiles, with rules of its own. None of them is built, and taking the document in without holding it to them would be half of it. So the order is on a `/_mock` path, where the test's own controls are, and says no more than an invoice needs.
+
+**A number is never a float.** A quantity or a price is taken as text or as a JSON number, and a JSON number is read as the decimal it was written as.
+
+**Nothing is billed until it is asked for**, as nothing else here happens by itself.
+
+**What the supplier makes up, and from what.** An order does not say who is selling, where to pay, or what the invoice is called. The invoice is a Peppol BIS Billing 3.0 invoice (type `380`, billing's profile `01`), and what is in it comes from:
+
+| In the invoice | From |
+| --- | --- |
+| The seller: name (BT-27), electronic address (BT-34), VAT identifier (BT-31), legal registration (BT-30), address (BT-35, 37, 38, 40), contact (BT-41, 42, 43) | the supplier: `name`, `endpoint`, `vat`, `legal_id`, `street`, `city`, `postal_code`, `country`, `contact`, `telephone`, `email`. Until it is changed it is Globex GmbH of Hamburg, the seller of this project's sample invoice. |
+| The invoice number (BT-1) | the supplier's `number_prefix` and a count of the invoices it has written: `GLX-0001`. A document sent with `POST /_mock/sent` is not counted. |
+| The issue date (BT-2) and the due date (BT-9) | the clock, and the clock plus the supplier's `payment_days` (30) |
+| The currency (BT-5) | the order's, or the supplier's `currency` (`EUR`) |
+| The order (BT-13) and each line's order line (BT-132) | the order's number and its lines' numbers |
+| The buyer reference (BT-10) | the order's `reference`; **where it has none, the order's number again.** Peppol's rules for Germany want a buyer reference on every invoice between two German parties, and an order number is what a supplier with nothing else has. |
+| The buyer (BT-44, 47, 48, 49, 50, 52, 53, 55) | the order's buyer |
+| How to pay (BG-16): a credit transfer (code `30`) to the account (BT-84, 85, 86), quoting the invoice number (BT-83) | the supplier's `iban`, `name` and `bic` |
+| Each line: quantity, unit, item name, the seller's and the buyer's item number, price | the order's line. The line's net amount (BT-131) is quantity times price, rounded to the cent with a half going up. |
+| VAT: category `S` on every line at one rate (BT-151, 152), and one breakdown (BG-23) | the supplier's `vat_rate` (19). The tax is the rate on the sum of the lines, rounded once. |
+| The totals (BT-106, 109, 110, 112, 115) | the sums of the above. Nothing is prepaid, and there are no allowances or charges. |
+
+**What it does not write:** a line at any VAT category but `S` (exempt, nought, reverse charge, an intra-community supply), allowances and charges, a delivery date, notes, payment terms as text, a credit note, an XRechnung. A rate of nought is refused for that reason. An invoice that needs one of these is written by whoever drives the mock and sent with `POST /_mock/sent`, as before.
 
 ### Both
 
@@ -270,6 +332,7 @@ A group with nothing in it is still there: an empty `TaxSubtotal` is a VAT break
 - **A duplicate is taken like the first.** A second document with a seller and a number already held is held too. A real buyer's system would likely reject it; with which status and reason is not known here, and is not guessed.
 - **Any buyer an invoice names is this mock**, and no document is turned away because its buyer is unknown. Nor does the supplier compare who a response is from with who its invoice was for: a response is matched by the invoice's number and type code alone, and of two documents sent with one number it is taken to be about the later.
 - **A response about a document that was never sent is turned away**, and so is one that names a type code other than its document's (`OP-BR111-R014`). The guide says the code must be the document's own and not what a seller does when it is not; and on the real network a response would be delivered whatever it was about. Both are this project's choices.
+- **How a real supplier bills an order is not known here, and the supplier's way is this project's own.** That it bills when asked and not on shipping, numbers its invoices by counting, takes a second order with a number it already holds, counts an invoice as billed though the buyer's system could not be reached or turned it away, and gives the order number as the buyer reference where it was given none: none of it is from a published source. An order's prices are also taken as they are; there is no price list to hold them to.
 - **Nothing is kept on disk.** Documents and responses are gone when the server stops.
 - **No XML Schema validation.** The published validators check the UBL schema before any rule. The standard library cannot, so this reads what it understands and reports what it did not. A document that is not schema-valid is not refused for that.
 - **The writer does not promise the same bytes.** Reading what was written gives an equal document. The order among repeats of different kinds (allowances and charges, say), the namespace prefixes, white space, comments and anything `UNHELD` are not kept.

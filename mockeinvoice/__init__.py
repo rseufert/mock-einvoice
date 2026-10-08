@@ -3,8 +3,9 @@
 So far: UBL 2.1 invoices and credit notes in and out, the rules of the
 EN 16931 core, all of Peppol's, and XRechnung's; the
 Peppol Invoice Response; and over HTTP a buyer that takes invoices in and
-answers them, and a supplier that sends them and takes the answers
-(`mockeinvoice.buyer`, `mockeinvoice.supplier`, `mockeinvoice.server`).
+answers them, and a supplier that sends them, writes one itself for an order
+it is told of, and takes the answers (`mockeinvoice.buyer`,
+`mockeinvoice.supplier`, `mockeinvoice.order`, `mockeinvoice.server`).
 
     from mockeinvoice import read, validate, write
 
