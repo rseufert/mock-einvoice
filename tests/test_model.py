@@ -3,7 +3,8 @@ import datetime
 import unittest
 from decimal import Decimal
 
-from mockeinvoice.model import ATTRIBUTE_TERMS, GROUPS, TERMS, Document, Group, Value
+from mockeinvoice.model import (ATTRIBUTE_TERMS, GROUP_INSIDE, GROUPS, TERMS, Document, Group,
+                                Value, catalogue, group_described, term_described)
 
 
 class ANumber(unittest.TestCase):
@@ -93,6 +94,60 @@ class AGroup(unittest.TestCase):
         first.add("BT-126", "1")
         self.assertFalse(first.empty())
 
+
+class TheCatalogue(unittest.TestCase):
+    def test_a_term_is_what_the_table_says_of_it(self):
+        self.assertEqual(term_described("BT-13"), {
+            "id": "BT-13", "name": "Purchase order reference", "group": None,
+            "kind": "identifier"})
+        self.assertEqual(term_described("BT-131"), {
+            "id": "BT-131", "name": "Invoice line net amount", "group": "BG-25",
+            "kind": "amount"})
+
+    def test_a_term_written_as_an_attribute_and_the_term_it_is_written_on(self):
+        self.assertEqual(term_described("BT-130")["attribute_of"],
+                         {"term": "BT-129", "attribute": "unitCode"})
+        self.assertEqual(term_described("BT-129")["attributes"], {"unitCode": "BT-130"})
+        self.assertEqual(term_described("BT-158")["attributes"],
+                         {"listID": "BT-158-1", "listVersionID": "BT-158-2"})
+        self.assertNotIn("attributes", term_described("BT-13"))
+        self.assertNotIn("attribute_of", term_described("BT-13"))
+
+    def test_a_group_and_its_terms(self):
+        self.assertEqual(group_described("BG-23"), {
+            "id": "BG-23", "name": "VAT breakdown", "repeats": True, "inside": None,
+            "terms": ["BT-116", "BT-117", "BT-118", "BT-119", "BT-120", "BT-121"]})
+        self.assertEqual([group_described("BG-5")[key] for key in ("repeats", "inside")],
+                         [False, "BG-4"])
+
+    def test_what_is_not_one(self):
+        for identifier in ("BT-4", "BT-166", "BT-29-1", "bt-13", "BG-33", "", "BG-25 "):
+            self.assertIsNone(term_described(identifier), identifier)
+            self.assertIsNone(group_described(identifier), identifier)
+        self.assertIsNone(term_described("BG-25"))
+        self.assertIsNone(group_described("BT-13"))
+
+    def test_the_catalogue_is_the_tables_and_nothing_else(self):
+        said = catalogue()
+        self.assertEqual([(one["id"], one["name"], one["group"] or "", one["kind"])
+                          for one in said["terms"]],
+                         [(term,) + what for term, what in TERMS.items()])
+        self.assertEqual([(one["id"], one["name"], one["repeats"]) for one in said["groups"]],
+                         [(group,) + what for group, what in GROUPS.items()])
+        self.assertEqual({one["id"]: one["inside"] for one in said["groups"] if one["inside"]},
+                         GROUP_INSIDE)
+        # Every term is under its group or under none, once.
+        under = [term for one in said["groups"] for term in one["terms"]]
+        self.assertEqual(sorted(under + [one["id"] for one in said["terms"] if not one["group"]]),
+                         sorted(TERMS))
+        # And every attribute term is on the term that holds it.
+        self.assertEqual({other: (one["id"], attribute) for one in said["terms"]
+                          for attribute, other in one.get("attributes", {}).items()},
+                         ATTRIBUTE_TERMS)
+        self.assertEqual({one["id"]: (one["attribute_of"]["term"], one["attribute_of"]["attribute"])
+                          for one in said["terms"] if "attribute_of" in one},
+                         {term: where for term, where in ATTRIBUTE_TERMS.items()
+                          if term in TERMS})
 
 if __name__ == "__main__":
     unittest.main()

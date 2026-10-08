@@ -454,3 +454,40 @@ TERMS_IMPLYING: Dict[str, List[str]] = {INVOICED_OBJECT_REFERENCE: ["BT-18"],
 for _term in TERMS:
     for _group in implied(_term):
         TERMS_IMPLYING.setdefault(_group, []).append(_term)
+
+
+def term_described(term: str) -> Optional[dict]:
+    """What is known of one business term, as plain data, or None: its name,
+    the group the standard puts it in (None for the document itself) and
+    its kind, all as `TERMS` has them. `attributes` names the terms the
+    syntax writes as attributes of this one's element, and `attribute_of` the
+    term and attribute this one is written as, where either applies."""
+    if term not in TERMS:
+        return None
+    name, group, kind = TERMS[term]
+    said: dict = {"id": term, "name": name, "group": group or None, "kind": kind}
+    attributes = {attribute: other for other, (holder, attribute) in ATTRIBUTE_TERMS.items()
+                  if holder == term}
+    if attributes:
+        said["attributes"] = attributes
+    if term in ATTRIBUTE_TERMS:
+        holder, attribute = ATTRIBUTE_TERMS[term]
+        said["attribute_of"] = {"term": holder, "attribute": attribute}
+    return said
+
+
+def group_described(group: str) -> Optional[dict]:
+    """What is known of one business group, as plain data, or None: its name,
+    whether it is kept as a group that repeats, the group it is written
+    inside, and its terms, as `GROUPS`, `GROUP_INSIDE` and `TERMS` have them."""
+    if group not in GROUPS:
+        return None
+    name, repeats = GROUPS[group]
+    return {"id": group, "name": name, "repeats": repeats, "inside": GROUP_INSIDE.get(group),
+            "terms": [term for term, (_name, inside, _kind) in TERMS.items() if inside == group]}
+
+
+def catalogue() -> dict:
+    """Every business term and group this package knows, in the standard's order."""
+    return {"terms": [term_described(term) for term in TERMS],
+            "groups": [group_described(group) for group in GROUPS]}
