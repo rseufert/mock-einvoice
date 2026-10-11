@@ -334,6 +334,7 @@ A node has its `element` and what it is:
 - **A tax registration is served as two entries**, the VAT identifier and whatever else, told apart by `cac:TaxScheme/cbc:ID`. In the package it is one piece of code and not a row of the table, so those nodes are written out by hand beside it. A buyer and a tax representative have no term for another registration: theirs is held as the VAT identifier, and the second entry says so by naming the same term.
 - **What has no node has no business term.** An element of a document that the binding has no node for is what the reader reports as `UNHELD`.
 - **Not in it:** which place a value is written back to when a term has two (the creditor identifier, on the seller or the payee), and how often an element may occur.
+
 **The clock.** Every stamp (`"received"`, `"sent"`, `"now"`), the date and time in an Invoice Response, and the dates on an invoice the supplier writes come from one clock.
 
 - **It is UTC, and every stamp says so**: `2026-10-07T09:00:00Z`, to the second.
