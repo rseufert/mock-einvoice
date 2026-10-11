@@ -11,10 +11,11 @@ mock-einvoice --port 8100
 
 It reads and writes UBL invoices and credit notes, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to all 165 of Peppol's (its own 63, the 31 it has for Germany and the 71 for seven other countries), and to the 34 of a standard XRechnung document; responses to all 82 of theirs. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones, and a supplier that sends them, writes the invoice for an order it is told of, and takes the answers.
 
-**What 0.2.0 is not:**
+**What 0.3.0 is not:**
 
-- **It writes no invoices of its own.** The supplier sends the documents it is given. (Since 0.2.0, and not yet released: it writes the invoice for an order it is told of. See [An order, and the invoice for it](#an-order-and-the-invoice-for-it).)
-- **It knows nothing of the other mocks.** Writing an invoice from one of mock-sap's billing documents, and saying "paid" when SAP has cleared it, is integration, and belongs in [mock-acme](https://github.com/rseufert/mock-acme) with the rest of it. It is not built there yet.
+- **It writes one kind of invoice of its own, and no other.** The supplier writes the invoice for an order it is told of: every line at one standard rate of VAT, no allowances or charges, no credit note, no XRechnung ([An order, and the invoice for it](#an-order-and-the-invoice-for-it)). Anything else it sends as it is given.
+- **It takes no order off the network.** An order is this mock's own JSON on a `/_mock` path. Peppol's UBL `Order` and its rules are not built.
+- **It knows nothing of the other mocks.** Writing an invoice from one of mock-sap's billing documents, and saying "paid" when SAP has cleared it, is integration, and belongs in [mock-acme](https://github.com/rseufert/mock-acme) with the rest of it: its `order_to_cash`, which is on its `main` and in no release of it yet.
 - **Peppol's ten rules for a seller in Iceland are held to this project's tests only.** Peppol publishes unit tests for its rules for Denmark, Greece, Italy, the Netherlands, Norway and Sweden, and every case agrees here; for Iceland it publishes none. Those ten were written from the same reading of the rule file as the tests that hold them, so a misreading would be in both.
 - **No CII, no XRechnung Extension, no ZUGFeRD**, and no transport: see [What it refuses](#what-it-refuses) and [Known to be wrong, or not real](#known-to-be-wrong-or-not-real).
 

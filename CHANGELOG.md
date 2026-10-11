@@ -8,6 +8,10 @@ says so where it does.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0] - 2026-10-10
+
 The supplier writes an invoice itself, and the business terms can be read
 from the running mock. Nothing changes for a document sent with
 `POST /_mock/sent`, but for one key more in what is said of it.
