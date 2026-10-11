@@ -8,7 +8,25 @@ says so where it does.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **The UBL binding over HTTP** ([#39]). `GET /_mock/binding/Invoice` and
+  `/_mock/binding/CreditNote` give where each business term and group is in
+  the document, as a tree of elements: each node its element and its term,
+  group or fixed value, the elements UBL requires that have no term among
+  them. It is made from `mockeinvoice.ubl.BINDINGS`, the reader's and
+  writer's own table, when asked. Where one element has several entries
+  (an allowance or a charge), each says the test that picks it, as words and
+  as data. A test reads this project's samples and fifty published documents
+  by the served binding alone and comes to what the reader comes to. In
+  Python, `ubl.described`.
+
+### Changed
+
+- The tests that pick an entry of the binding (`ubl.sepa`,
+  `ubl.in_accounting_currency`, and what `ubl.indicator` and
+  `ubl.document_type` return) are `ubl.When` objects, called as the
+  functions were. Nothing is read or written differently.
 
 ## [0.3.0] - 2026-10-10
 
@@ -290,3 +308,4 @@ built, and was in no release.
 [#27]: https://github.com/rseufert/mock-einvoice/issues/27
 [#33]: https://github.com/rseufert/mock-einvoice/issues/33
 [#34]: https://github.com/rseufert/mock-einvoice/issues/34
+[#39]: https://github.com/rseufert/mock-einvoice/issues/39

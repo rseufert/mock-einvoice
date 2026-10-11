@@ -17,6 +17,7 @@ from mockeinvoice.buyer import Buyer
 from mockeinvoice.model import catalogue
 from mockeinvoice.server import LARGEST, PORT, arguments, poster, serve
 from mockeinvoice.supplier import Supplier
+from mockeinvoice.ubl import described
 
 from . import sample, unbuilt
 from .test_buyer import INVOICE, WITH_RESPONSE, XRECHNUNG
@@ -160,7 +161,8 @@ class TheMocksSide(Served):
         self.assertIn("POST /_mock/invoices/<id>/responses", body["paths"])
         self.assertIn("POST /_mock/orders/<id>/invoices", body["paths"])
         self.assertIn("GET /_mock/terms/<BT-n or BG-n>", body["paths"])
-        self.assertEqual(len(body["paths"]), 27)
+        self.assertIn("GET /_mock/binding/<kind>", body["paths"])
+        self.assertEqual(len(body["paths"]), 29)
 
     def test_the_terms_are_the_packages_own_table(self):
         status, _headers, body = self.call("GET", "/_mock/terms")
@@ -187,6 +189,23 @@ class TheMocksSide(Served):
             self.assertIn(why, body["reason"])
         self.assertEqual(self.call("POST", "/_mock/terms", b"")[0], 405)
         self.assertEqual(self.call("GET", "/_mock/terms/BT-13/name")[0], 404)
+
+    def test_the_binding_is_the_packages_own_table(self):
+        self.assertEqual(self.call("GET", "/_mock/binding")[::2], (200, {
+            "Invoice": "/_mock/binding/Invoice", "CreditNote": "/_mock/binding/CreditNote"}))
+        for kind in ("Invoice", "CreditNote"):
+            status, _headers, body = self.call("GET", "/_mock/binding/" + kind)
+            self.assertEqual((status, body), (200, described(kind)))
+            self.assertEqual((body["kind"], body["children"][2]),
+                             (kind, {"element": "cbc:ID", "term": "BT-1"}))
+        for kind in ("Order", "invoice", "", "Invoice/cbc:ID"):
+            status, _headers, body = self.call("GET", "/_mock/binding/" + kind)
+            self.assertEqual(status, 404, kind)
+        status, _headers, body = self.call("GET", "/_mock/binding/invoice")
+        self.assertEqual((body["error"], body["reason"]), (
+            "NO-SUCH-KIND", "there is a binding for Invoice and CreditNote, written so, and "
+                            "not for 'invoice'"))
+        self.assertEqual(self.call("POST", "/_mock/binding/Invoice", b"")[0], 405)
 
     def test_health_is_what_the_other_mocks_answer_too(self):
         self.call("POST", "/_mock/sent", INVOICE)
