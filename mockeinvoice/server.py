@@ -39,6 +39,8 @@ And both:
     POST  /_mock/validate               a document held to its rules, and not kept
     GET   /_mock/terms                  the business terms and groups, by number
     GET   /_mock/terms/<BT-n or BG-n>   one of them
+    GET   /_mock/binding                the kinds of document there is a binding for
+    GET   /_mock/binding/<kind>         where each term is in an Invoice or a CreditNote
     POST  /_mock/advance                move the clock forward
     POST  /_mock/reset                  forget everything
 
@@ -70,7 +72,7 @@ from .model import (ATTRIBUTE_TERMS, Finding, Refused, catalogue, group_describe
 from .rules import Report, check, check_response
 from .order import NotTaken, Order
 from .supplier import Got, Issued, NotBilled, NotSent, Supplier
-from .ubl import parse_tree, tree
+from .ubl import BINDINGS, described, parse_tree, tree
 
 PORT = 8100
 LARGEST = 10 * 1024 * 1024         # of a request's body, in bytes
@@ -223,6 +225,8 @@ ROUTES: List[Tuple[str, "re.Pattern[str]", str]] = [
         ("POST", "/_mock/validate", "validate"),
         ("GET", "/_mock/terms", "terms"),
         ("GET", "/_mock/terms/([^/]+)", "term"),
+        ("GET", "/_mock/binding", "bindings"),
+        ("GET", "/_mock/binding/([^/]*)", "binding"),
         ("POST", "/_mock/advance", "advance"),
         ("POST", "/_mock/reset", "reset"),
     )]
@@ -341,7 +345,8 @@ class Handler(BaseHTTPRequestHandler):
             "mock": "mock-einvoice", "version": __version__, "sides": ["buyer", "supplier"],
             "answers": self.buyer.answers,
             "paths": ["%s %s" % (method, pattern.pattern.strip("^$").replace(r"(\d+)", "<id>")
-                                     .replace("([^/]+)", "<BT-n or BG-n>"))
+                                     .replace("([^/]+)", "<BT-n or BG-n>")
+                                     .replace("([^/]*)", "<kind>"))
                       for method, pattern, _name in ROUTES]})
 
     def invoices(self) -> None:
@@ -498,6 +503,15 @@ class Handler(BaseHTTPRequestHandler):
                           "they are written as BT-13 and BG-25, and GET /_mock/terms lists "
                           "them" % identifier)
         self.json(200, said)
+
+    def bindings(self) -> None:
+        self.json(200, {kind: "/_mock/binding/%s" % kind for kind in BINDINGS})
+
+    def binding(self, kind: str) -> None:
+        if kind not in BINDINGS:
+            raise Problem(404, "NO-SUCH-KIND", "there is a binding for %s, written so, and "
+                          "not for %r" % (" and ".join(BINDINGS), kind))
+        self.json(200, described(kind))
 
     def behaviour(self) -> None:
         self.json(200, {"answers": self.buyer.answers})
