@@ -248,7 +248,7 @@ class Billing(unittest.TestCase):
     def test_an_order_is_taken_and_nothing_is_billed(self):
         taken = self.supplier.take(ORDER)
         self.assertEqual((taken.id, taken.received, taken.status, taken.invoices),
-                         ("1", "2026-10-07T12:00:30", "open", []))
+                         ("1", "2026-10-07T12:00:30Z", "open", []))
         self.assertIs(self.supplier.orders["1"], taken)
         self.assertEqual(self.supplier.take(order(number="4500000018")).id, "2")
         # A number it already holds is no reason not to take a second.

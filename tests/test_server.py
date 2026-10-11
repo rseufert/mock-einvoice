@@ -1,4 +1,5 @@
 """The mock over HTTP: each path, what it answers, and what it refuses."""
+import contextlib
 import datetime
 import http.client
 import json
@@ -14,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from mockeinvoice import __version__, validate_response
 from mockeinvoice.buyer import Buyer
+from mockeinvoice.clock import Clock
 from mockeinvoice.model import catalogue
 from mockeinvoice.server import LARGEST, PORT, arguments, poster, serve
 from mockeinvoice.supplier import Supplier
@@ -89,7 +91,7 @@ class TheNetworksSide(Served):
             "id": "1", "kind": "Invoice", "number": "GLX-4711", "issued": "2026-10-02",
             "type": "380", "specification": "peppol", "profile": "01",
             "seller": "Globex GmbH", "buyer": "ACME Corporation",
-            "received": "2026-10-07T12:00:30", "verdict": "valid", "status": "",
+            "received": "2026-10-07T12:00:30Z", "verdict": "valid", "status": "",
             "findings": [], "responses": [], "document": "/_mock/invoices/1/document"})
         self.assertEqual(self.seller.got, [])
 
@@ -160,7 +162,8 @@ class TheMocksSide(Served):
         self.assertIn("POST /_mock/invoices/<id>/responses", body["paths"])
         self.assertIn("POST /_mock/orders/<id>/invoices", body["paths"])
         self.assertIn("GET /_mock/terms/<BT-n or BG-n>", body["paths"])
-        self.assertEqual(len(body["paths"]), 27)
+        self.assertIn("POST /_mock/advance", body["paths"])
+        self.assertEqual(len(body["paths"]), 28)
 
     def test_the_terms_are_the_packages_own_table(self):
         status, _headers, body = self.call("GET", "/_mock/terms")
@@ -191,7 +194,8 @@ class TheMocksSide(Served):
     def test_health_is_what_the_other_mocks_answer_too(self):
         self.call("POST", "/_mock/sent", INVOICE)
         self.assertEqual(self.call("GET", "/_mock/health")[::2],
-                         (200, {"status": "ok", "version": __version__, "held": 1, "sent": 1}))
+                         (200, {"status": "ok", "version": __version__,
+                                "now": "2026-10-07T12:00:30Z", "held": 1, "sent": 1}))
 
     def test_what_is_held(self):
         self.call("POST", "/invoices", XRECHNUNG)
@@ -327,7 +331,7 @@ class TheSupplier(unittest.TestCase):
         self.assertEqual(body, {
             "id": "1", "kind": "Invoice", "number": "GLX-4711", "issued": "2026-10-02",
             "type": "380", "specification": "peppol", "seller": "Globex GmbH",
-            "buyer": "ACME Corporation", "sent": "2026-10-07T12:00:30", "verdict": "valid",
+            "buyer": "ACME Corporation", "sent": "2026-10-07T12:00:30Z", "verdict": "valid",
             "forced": False, "delivery": {"to": self.buyers + "/invoices", "status": 201},
             "status": "", "order": None, "findings": [], "responses": [],
             "document": "/_mock/sent/1/document"})
@@ -346,9 +350,9 @@ class TheSupplier(unittest.TestCase):
         sent = self.call("GET", "/_mock/sent/1")[2]
         self.assertEqual((sent["status"], sent["responses"]), ("RE", [
             {"id": "1", "sent": "1", "code": "AB", "partial": False, "ignored": "",
-             "received": "2026-10-07T12:00:30", "document": "/_mock/answers/1"},
+             "received": "2026-10-07T12:00:30Z", "document": "/_mock/answers/1"},
             {"id": "2", "sent": "1", "code": "RE", "partial": False, "ignored": "",
-             "received": "2026-10-07T12:00:30", "document": "/_mock/answers/2"}]))
+             "received": "2026-10-07T12:00:30Z", "document": "/_mock/answers/2"}]))
         self.assertEqual(self.call("GET", "/_mock/answers/2")[2],
                          self.at_the_buyer("GET", "/_mock/responses/2")[2])
 
@@ -427,7 +431,7 @@ class TheSupplier(unittest.TestCase):
         self.assertEqual((status, headers["Location"]), (201, "/_mock/orders/1"))
         self.assertEqual(body, {
             "id": "1", "number": "4500000017", "reference": "", "buyer": ORDER["buyer"],
-            "received": "2026-10-07T12:00:30", "status": "open", "currency": "",
+            "received": "2026-10-07T12:00:30Z", "status": "open", "currency": "",
             "lines": [
                 {"line": "10", "name": "Widget", "seller_item": "W-100", "buyer_item": "",
                  "quantity": "40", "unit": "C62", "price": "20.00", "billed": "0",
@@ -443,7 +447,7 @@ class TheSupplier(unittest.TestCase):
         self.assertEqual(body, {
             "id": "1", "kind": "Invoice", "number": "GLX-0001", "issued": "2026-10-07",
             "type": "380", "specification": "peppol", "seller": "Globex GmbH",
-            "buyer": "ACME Corporation", "sent": "2026-10-07T12:00:30", "verdict": "valid",
+            "buyer": "ACME Corporation", "sent": "2026-10-07T12:00:30Z", "verdict": "valid",
             "forced": False, "delivery": {"to": self.buyers + "/invoices", "status": 201},
             "status": "", "order": "/_mock/orders/1", "findings": [], "responses": [],
             "document": "/_mock/sent/1/document"})
@@ -460,7 +464,7 @@ class TheSupplier(unittest.TestCase):
                          ("billed", ["/_mock/sent/1"], ["0", "0.0"]))
         self.assertEqual(self.call("GET", "/_mock/orders")[2], [
             {"id": "1", "number": "4500000017", "reference": "", "buyer": "ACME Corporation",
-             "received": "2026-10-07T12:00:30", "status": "billed"}])
+             "received": "2026-10-07T12:00:30Z", "status": "billed"}])
 
     def test_what_the_buyer_says_of_an_invoice_written_here_comes_back(self):
         self.call("POST", "/_mock/orders", ORDER)
@@ -590,6 +594,116 @@ class Delivery(Served):
         self.assertEqual(self.call("GET", "/_mock/invoices/1")[2]["status"], "AB")
 
 
+class TheClock(unittest.TestCase):
+    """Two of the mock again, going by one clock that is pinned and can be
+    moved from either."""
+
+    def setUp(self):
+        self.clock = Clock("2026-10-07T09:00")
+        self.buyer, self.supplier = Buyer(now=self.clock), Supplier(now=self.clock)
+        self.buying = self.start(serve(self.buyer, port=0, quiet=True))
+        self.selling = self.start(serve(Buyer(now=self.clock), port=0, quiet=True,
+                                        supplier=self.supplier))
+        self.base = "http://127.0.0.1:%d" % self.selling.server_address[1]
+        self.buyers = "http://127.0.0.1:%d" % self.buying.server_address[1]
+        self.supplier.deliver = poster(self.buyers + "/invoices")
+        self.buyer.deliver = poster(self.base + "/responses")
+
+    start, call, at_the_buyer = Served.start, Served.call, TheSupplier.at_the_buyer
+
+    def test_a_pinned_clock_stands_still_until_it_is_moved(self):
+        self.call("POST", "/_mock/sent", INVOICE)
+        self.call("POST", "/_mock/sent", INVOICE)
+        self.assertEqual([one["sent"] for one in self.call("GET", "/_mock/sent")[2]],
+                         ["2026-10-07T09:00:00Z"] * 2)
+        self.assertEqual(self.call("POST", "/_mock/advance?seconds=90", b"")[::2], (200, {
+            "from": "2026-10-07T09:00:00Z", "to": "2026-10-07T09:01:30Z", "seconds": 90,
+            "pinned": True}))
+        self.call("POST", "/_mock/sent", INVOICE)
+        self.assertEqual((self.call("GET", "/_mock/sent/3")[2]["sent"],
+                          self.call("GET", "/_mock/health")[2]["now"]),
+                         ("2026-10-07T09:01:30Z",) * 2)
+
+    def test_a_response_given_after_an_advance_is_stamped_then_and_says_so_inside(self):
+        self.call("POST", "/_mock/sent", INVOICE)
+        self.at_the_buyer("POST", "/_mock/invoices/1/responses", {"code": "IP"})
+        moved = self.at_the_buyer("POST", "/_mock/advance", {"to": "2026-10-09T14:30:15"})[2]
+        self.assertEqual((moved["to"], moved["seconds"]),
+                         ("2026-10-09T14:30:15Z", 2 * 86400 + 5 * 3600 + 30 * 60 + 15))
+        self.at_the_buyer("POST", "/_mock/invoices/1/responses", {"code": "AP"})
+        self.assertEqual([got["received"] for got in
+                          self.call("GET", "/_mock/sent/1")[2]["responses"]],
+                         ["2026-10-07T09:00:00Z", "2026-10-09T14:30:15Z"])
+        first, second = (self.at_the_buyer("GET", "/_mock/responses/%d" % n)[2] for n in (1, 2))
+        self.assertIn(b"<cbc:IssueDate>2026-10-07</cbc:IssueDate>", first)
+        self.assertIn(b"<cbc:IssueTime>09:00:00</cbc:IssueTime>", first)
+        self.assertIn(b"<cbc:IssueDate>2026-10-09</cbc:IssueDate>", second)
+        self.assertIn(b"<cbc:IssueTime>14:30:15</cbc:IssueTime>", second)
+
+    def test_an_invoice_written_after_an_advance_is_dated_and_due_from_then(self):
+        self.call("POST", "/_mock/advance", {"to": "2026-12-30"})
+        self.call("POST", "/_mock/orders", ORDER)
+        self.call("POST", "/_mock/orders/1/invoices", b"")
+        document = self.call("GET", "/_mock/sent/1/document")[2]
+        self.assertIn(b"<cbc:IssueDate>2026-12-30</cbc:IssueDate>", document)
+        self.assertIn(b"<cbc:DueDate>2027-01-29</cbc:DueDate>", document)
+
+    def test_what_an_advance_takes(self):
+        for path, body, to in (("?to=2026-10-07T09:00", b"", "2026-10-07T09:00:00Z"),
+                               ("?seconds=0", b"", "2026-10-07T09:00:00Z"),
+                               ("", {"seconds": 1}, "2026-10-07T09:00:01Z"),
+                               ("?to=2026-10-07T12:00%2B02:00", b"", "2026-10-07T10:00:00Z"),
+                               ("", {"to": "2026-10-08T00:00:00Z"}, "2026-10-08T00:00:00Z"),
+                               ("?to=2026-10-09", {}, "2026-10-09T00:00:00Z")):
+            status, _headers, said = self.call("POST", "/_mock/advance" + path, body)
+            self.assertEqual((status, said.get("to")), (200, to), path or body)
+
+    def test_what_it_does_not(self):
+        for path, body, why in (
+                ("", b"", "advance takes seconds, or a time to move to, and one of them"),
+                ("?seconds=1&to=2026-10-08", b"", "and one of them"),
+                ("?seconds=1", {"to": "2026-10-08"}, "and one of them"),
+                ("?seconds=-1", b"", "seconds is a whole number, nought or more, and not '-1'"),
+                ("?seconds=1.5", b"", "seconds is a whole number"),
+                ("", {"seconds": 1.5}, "seconds is a whole number"),
+                ("", {"seconds": True}, "seconds is a whole number"),
+                ("", {"seconds": "soon"}, "seconds is a whole number"),
+                ("?seconds=315360001", b"", "an advance moves the clock at most 315360000"),
+                ("?to=2036-10-07T09:00", b"", "an advance moves the clock at most"),
+                ("?to=2026-10-07T08:59:59", b"", "the clock does not go backwards: it is "
+                 "2026-10-07T09:00:00Z, and 2026-10-07T08:59:59Z is before that"),
+                ("?to=tomorrow", b"", "a time is written 2026-10-07"),
+                ("?to=2026-02-30", b"", "2026-02-30 is no date and time there is"),
+                ("", {"to": 20261008}, "a time is written"),
+                ("?days=1", b"", "what is taken is seconds=N or to=a time, once"),
+                ("?seconds=1&seconds=2", b"", "what is taken is"),
+                ("", {"days": 1}, "the request has days")):
+            status, _headers, said = self.call("POST", "/_mock/advance" + path, body)
+            self.assertEqual((status, said["error"]), (400, "REQUEST"), path or body)
+            self.assertIn(why, said["reason"])
+        self.assertEqual(self.call("GET", "/_mock/health")[2]["now"], "2026-10-07T09:00:00Z")
+        self.assertEqual(self.call("GET", "/_mock/advance")[0], 405)
+
+    def test_reset_forgets_everything_and_leaves_the_clock_where_it_is(self):
+        self.call("POST", "/_mock/advance?seconds=60", b"")
+        self.call("POST", "/_mock/reset", b"")
+        self.assertEqual(self.call("GET", "/_mock/health")[2]["now"], "2026-10-07T09:01:00Z")
+
+    def test_a_server_whose_clock_is_no_clock_cannot_be_moved(self):
+        # `serve` given a buyer whose `now` is any other callable.
+        other = self.start(serve(Buyer(now=lambda: NOON), port=0, quiet=True))
+        self.base = "http://127.0.0.1:%d" % other.server_address[1]
+        status, _headers, said = self.call("POST", "/_mock/advance?seconds=1", b"")
+        self.assertEqual((status, said["error"]), (409, "NO-CLOCK"))
+        # And one given a clock is moved, with its supplier.
+        clock = Clock("2026-01-01T00:00")
+        moved = self.start(serve(Buyer(now=clock), port=0, quiet=True))
+        self.base = "http://127.0.0.1:%d" % moved.server_address[1]
+        self.call("POST", "/_mock/advance?seconds=1", b"")
+        self.assertEqual(self.call("POST", "/_mock/sent", INVOICE)[2]["sent"],
+                         "2026-01-01T00:00:01Z")
+
+
 class TheCommandLine(unittest.TestCase):
     def test_the_defaults(self):
         self.assertTrue(arguments(["-q"]).quiet)
@@ -606,7 +720,12 @@ class TheCommandLine(unittest.TestCase):
         self.assertEqual((asked.port, asked.answers, asked.seller_url, asked.buyer_url,
                           asked.clock, asked.quiet),
                          (0, "never", "http://s/r", "http://b/i",
-                          datetime.datetime(2026, 10, 7, 9, 0), True))
+                          datetime.datetime(2026, 10, 7, 9, 0, tzinfo=datetime.timezone.utc),
+                      True))
+        self.assertEqual(arguments(["--clock", "2026-10-07T11:00+02:00"]).clock, asked.clock)
+        with self.assertRaises(SystemExit), open(os.devnull, "w") as nowhere, \
+                contextlib.redirect_stderr(nowhere):
+            arguments(["--clock", "tomorrow"])
 
     def test_the_command_starts_a_server_and_says_where(self):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

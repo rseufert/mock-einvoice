@@ -8,7 +8,33 @@ says so where it does.
 
 ## [Unreleased]
 
-Nothing yet.
+**Every stamp changes**: it ends in `Z` now.
+
+### Added
+
+- **A clock that can be moved** ([#41]). `POST /_mock/advance` takes
+  `seconds` or a time `to` move to, in the query string or as JSON, and what
+  is received or said afterwards is stamped then: the stamps, the date and
+  time in an Invoice Response, and the dates of an invoice the supplier
+  writes. It does not go backwards. In Python, `mockeinvoice.clock.Clock`,
+  which a `Buyer` and a `Supplier` take as their `now`.
+- `GET /_mock/health` says what time it is by the clock, as `"now"`.
+- `--clock` takes a time with `Z` or an offset (`2026-10-07T11:00+02:00`),
+  and a date alone.
+
+### Changed
+
+- **A stamp says its zone.** `"received"` and `"sent"` were
+  `2026-10-07T09:00:00` and are `2026-10-07T09:00:00Z`. They were UTC before
+  and are UTC now; a client that parsed them as a time with no zone has to
+  take the `Z`.
+- **What `--clock` means is written down, and is what it did**: the clock is
+  pinned to that moment, in UTC, and stands still until it is advanced. A
+  `now` given to a `Buyer` or a `Supplier` with a zone other than UTC is said
+  in UTC, where its own wall time was written before.
+- `--clock` refuses what is not a time with a sentence, and no longer takes
+  the other forms `datetime.fromisoformat` does (a space for the `T`,
+  fractions of a second).
 
 ## [0.3.0] - 2026-10-10
 
@@ -290,3 +316,4 @@ built, and was in no release.
 [#27]: https://github.com/rseufert/mock-einvoice/issues/27
 [#33]: https://github.com/rseufert/mock-einvoice/issues/33
 [#34]: https://github.com/rseufert/mock-einvoice/issues/34
+[#41]: https://github.com/rseufert/mock-einvoice/issues/41

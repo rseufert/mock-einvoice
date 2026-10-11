@@ -39,6 +39,7 @@ And both:
     POST  /_mock/validate               a document held to its rules, and not kept
     GET   /_mock/terms                  the business terms and groups, by number
     GET   /_mock/terms/<BT-n or BG-n>   one of them
+    POST  /_mock/advance                move the clock forward
     POST  /_mock/reset                  forget everything
 
 None of this is Peppol's transport. A real invoice travels by AS4 between
@@ -62,6 +63,7 @@ from typing import Callable, List, Optional, Sequence, Tuple
 from . import __version__
 from . import response as _response
 from . import specification as _specification
+from .clock import Clock, Invalid, moment
 from .buyer import ANSWERS, Buyer, Held, NotSaid, Sent, TurnedAway, not_run
 from .model import (ATTRIBUTE_TERMS, Finding, Refused, catalogue, group_described,
                     term_described)
@@ -221,6 +223,7 @@ ROUTES: List[Tuple[str, "re.Pattern[str]", str]] = [
         ("POST", "/_mock/validate", "validate"),
         ("GET", "/_mock/terms", "terms"),
         ("GET", "/_mock/terms/([^/]+)", "term"),
+        ("POST", "/_mock/advance", "advance"),
         ("POST", "/_mock/reset", "reset"),
     )]
 
@@ -228,8 +231,9 @@ ROUTES: List[Tuple[str, "re.Pattern[str]", str]] = [
 class Handler(BaseHTTPRequestHandler):
     server_version = "mock-einvoice/%s" % __version__
     protocol_version = "HTTP/1.1"
-    buyer: Buyer                    # both set on the class `serve` makes
+    buyer: Buyer                    # all set on the class `serve` makes
     supplier: Supplier
+    clock: Optional[Clock] = None   # the one both go by, if it is one that moves
     quiet = False
 
     # -- plumbing -----------------------------------------------------------------------
@@ -463,7 +467,7 @@ class Handler(BaseHTTPRequestHandler):
             raise Problem(400, "REQUEST", no.reason)
 
     def health(self) -> None:
-        self.json(200, {"status": "ok", "version": __version__,
+        self.json(200, {"status": "ok", "version": __version__, "now": self.buyer.stamp(),
                         "held": len(self.buyer.invoices), "sent": len(self.supplier.sent)})
 
     def turned_away(self) -> None:
@@ -506,6 +510,21 @@ class Handler(BaseHTTPRequestHandler):
         self.buyer.answers = asked.get("answers", self.buyer.answers)
         self.behaviour()
 
+    def advance(self) -> None:
+        """Seconds or a time to move to, in the query string or as JSON."""
+        query = urllib.parse.parse_qs(self.query, keep_blank_values=True)
+        if set(query) - {"seconds", "to"} or any(len(given) > 1 for given in query.values()):
+            raise Problem(400, "REQUEST", "what is taken is seconds=N or to=a time, once")
+        asked = dict(self.asked(("seconds", "to")), **{name: given[0]
+                                                      for name, given in query.items()})
+        if self.clock is None:
+            raise Problem(409, "NO-CLOCK", "this server was made with a clock that cannot "
+                                           "be moved")
+        try:
+            self.json(200, self.clock.advance(asked.get("seconds"), asked.get("to")))
+        except Invalid as no:
+            raise Problem(400, "REQUEST", str(no))
+
     def reset(self) -> None:
         if self.headers.get("Content-Length"):
             self.body()
@@ -531,8 +550,12 @@ def serve(buyer: Buyer, host: str = "127.0.0.1", port: int = PORT, quiet: bool =
           supplier: Optional[Supplier] = None) -> ThreadingHTTPServer:
     """A server for one buyer and one supplier, bound and not yet serving:
     call `serve_forever()` on it. Port 0 is a port the operating system
-    chooses, which `server_address` then names."""
+    chooses, which `server_address` then names. `POST /_mock/advance` moves
+    the buyer's clock where that is a `Clock`; a supplier made here goes by
+    the same one."""
     handler = type("Handler", (Handler,), {"buyer": buyer, "quiet": quiet,
+                                           "clock": (buyer.now if isinstance(
+                                               buyer.now, Clock) else None),
                                            "supplier": supplier or Supplier(now=buyer.now)})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
@@ -558,18 +581,26 @@ def arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--answers", choices=ANSWERS, default="required",
                         help="when a document is acknowledged (AB) on receipt: where its "
                              "profile requires a response (the default), always, or never")
-    parser.add_argument("--clock", metavar="YYYY-MM-DDTHH:MM",
-                        type=datetime.datetime.fromisoformat,
-                        help="the date and time on every response, for output that does "
-                             "not change from run to run; the default is now, in UTC")
+    parser.add_argument("--clock", metavar="YYYY-MM-DDTHH:MM", type=pinned,
+                        help="pin the clock to this time, in UTC unless it says Z or an "
+                             "offset: every stamp and response carries it until POST "
+                             "/_mock/advance moves it, for output that does not change "
+                             "from run to run; the default is real time")
     parser.add_argument("-q", "--quiet", action="store_true", help="log nothing per request")
     parser.add_argument("--version", action="version", version=__version__)
     return parser.parse_args(argv)
 
 
+def pinned(text: str) -> datetime.datetime:
+    try:
+        return moment(text)
+    except Invalid as no:
+        raise argparse.ArgumentTypeError(str(no))
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     asked = arguments(argv)
-    now = (lambda: asked.clock) if asked.clock else None
+    now = Clock(asked.clock)
     buyer = Buyer(answers=asked.answers, now=now,
                   deliver=poster(asked.seller_url) if asked.seller_url else None)
     supplier = Supplier(now=now, deliver=poster(asked.buyer_url) if asked.buyer_url else None)

@@ -286,7 +286,8 @@ $ curl -s -X POST http://127.0.0.1:8101/_mock/orders/1/invoices
 
 | | |
 | --- | --- |
-| `GET /_mock/health` | that it is up, its version, and how many documents it holds and has sent |
+| `GET /_mock/health` | that it is up, its version, what time it is by its clock (`"now"`), and how many documents it holds and has sent |
+| `POST /_mock/advance` | move the clock forward: `?seconds=90`, or `?to=2026-10-08T08:00`, in the query string or as JSON. It answers `{"from", "to", "seconds", "pinned"}`. `400` for a time behind the clock, a fraction of a second, or more than ten years at once |
 | `GET /_mock/turned-away` | what was not taken in, on which side, and why |
 | `POST /_mock/validate` | an invoice, a credit note or an Invoice Response held to its rules, and not kept |
 | `GET /_mock/terms` | the business terms and groups this package knows, by number: `{"terms": [{"id", "name", "group", "kind"}], "groups": [{"id", "name", "repeats", "inside", "terms"}]}`, 164 terms and 32 groups, in the standard's order |
@@ -299,6 +300,15 @@ $ curl -s -X POST http://127.0.0.1:8101/_mock/orders/1/invoices
 - A group's `repeats` says how this package holds it and not how often the standard allows it: `true` where it is kept as a group of its own (the lines, the VAT breakdown), `false` where its terms are held by the document or the line. `inside` is the group it is written within, if any.
 - Three terms are written as an attribute of another's element (`BT-130`, the unit, is `BT-129`'s `unitCode`) and say so in `attribute_of`. Sixteen more, the scheme identifiers and their like (`BT-29-1`), have a number and no entry of their own here: each is listed under `attributes` on the term that holds it, and asked for by itself is `404` saying where it is.
 - A finding still gives a term by its number alone. Its path is not always a term (a rule about the XML gives an XPath), and a client that wants the name has this to look it up in.
+
+**The clock.** Every stamp (`"received"`, `"sent"`, `"now"`), the date and time in an Invoice Response, and the dates on an invoice the supplier writes come from one clock.
+
+- **It is UTC, and every stamp says so**: `2026-10-07T09:00:00Z`, to the second.
+- **`--clock` pins it, and a pinned clock stands still.** `--clock 2026-10-07T09:00` is that moment in UTC. `--clock 2026-10-07T11:00+02:00` is the same moment, and is said back in UTC; a `Z` may be written and changes nothing. Every stamp and every response carries that one instant until the clock is moved, so that what a run writes does not change from run to run. It does not tick on between advances, as mock-sap's pinned clock does: a second that depends on how fast the run went is what pinning is there to take away.
+- **`POST /_mock/advance` moves it**, pinned or not, by whole seconds or to a time, written as `--clock` is (a date alone is its midnight). What is received or said after that is stamped then. Without `--clock` the clock is real time plus whatever it was advanced by.
+- **It does not go backwards.** A time it is already at moves it nowhere and is no error. `POST /_mock/reset` forgets the documents and leaves the clock where it is.
+- **The time inside an Invoice Response has no zone written on it** (`cbc:IssueTime` is `09:00:00`). It is UTC like the rest.
+- Two of the mock run as two processes have two clocks, and each is advanced by itself.
 
 To see the two sides talk, run two: a buyer with `--seller-url http://127.0.0.1:8101/responses`, and a supplier with `--buyer-url http://127.0.0.1:8100/invoices`.
 
@@ -338,7 +348,7 @@ A group with nothing in it is still there: an empty `TaxSubtotal` is a VAT break
 
 - **No transport.** A real Peppol invoice goes by AS4, signed and encrypted, between access points that find each other by SMP lookup. Here it is a `POST`, and the other party is a URL. The paths and status codes are this mock's own; nothing published defines an HTTP interface for any of it.
 - **An invalid document is turned away at the door and gets no Invoice Response.** On the real network the sender's access point validates before it sends, and Peppol's guide puts the status of a transmission outside what an Invoice Response is for. That this is how a failed validation should look from the seller's side is this project's reading and not a published rule.
-- **Nothing happens with time.** A real buyer moves an invoice to in process, accepted and paid over days, and Peppol asks for a first response within three working days. Here each status after the first is asked for.
+- **Nothing happens with time**, though the clock can be moved (`POST /_mock/advance`): moving it changes what is stamped next and nothing else. A real buyer moves an invoice to in process, accepted and paid over days, and Peppol asks for a first response within three working days. Here each status after the first is asked for.
 - **A duplicate is taken like the first.** A second document with a seller and a number already held is held too. A real buyer's system would likely reject it; with which status and reason is not known here, and is not guessed.
 - **Any buyer an invoice names is this mock**, and no document is turned away because its buyer is unknown. Nor does the supplier compare who a response is from with who its invoice was for: a response is matched by the invoice's number and type code alone, and of two documents sent with one number it is taken to be about the later.
 - **A response about a document that was never sent is turned away**, and so is one that names a type code other than its document's (`OP-BR111-R014`). The guide says the code must be the document's own and not what a seller does when it is not; and on the real network a response would be delivered whatever it was about. Both are this project's choices.
