@@ -291,6 +291,7 @@ $ curl -s -X POST http://127.0.0.1:8101/_mock/orders/1/invoices
 | `POST /_mock/validate` | an invoice, a credit note or an Invoice Response held to its rules, and not kept |
 | `GET /_mock/terms` | the business terms and groups this package knows, by number: `{"terms": [{"id", "name", "group", "kind"}], "groups": [{"id", "name", "repeats", "inside", "terms"}]}`, 164 terms and 32 groups, in the standard's order |
 | `GET /_mock/terms/BT-13`, `/_mock/terms/BG-25` | one term or one group, as in the list. `404` `NO-SUCH-TERM` for anything else, written any other way (`bt-13`) |
+| `GET /_mock/binding/Invoice`, `/_mock/binding/CreditNote` | where each term and group is in that UBL document: the binding as a tree of elements. `GET /_mock/binding` names the two. `404` `NO-SUCH-KIND` for anything else |
 | `POST /_mock/reset` | forget every document and response, on both sides |
 
 **The terms are the package's own table, served.** `GET /_mock/terms` is made from `mockeinvoice.model.TERMS` and `GROUPS` when it is asked, so what a client reads is what the reader, the writer and the rules go by.
@@ -299,6 +300,39 @@ $ curl -s -X POST http://127.0.0.1:8101/_mock/orders/1/invoices
 - A group's `repeats` says how this package holds it and not how often the standard allows it: `true` where it is kept as a group of its own (the lines, the VAT breakdown), `false` where its terms are held by the document or the line. `inside` is the group it is written within, if any.
 - Three terms are written as an attribute of another's element (`BT-130`, the unit, is `BT-129`'s `unitCode`) and say so in `attribute_of`. Sixteen more, the scheme identifiers and their like (`BT-29-1`), have a number and no entry of their own here: each is listed under `attributes` on the term that holds it, and asked for by itself is `404` saying where it is.
 - A finding still gives a term by its number alone. Its path is not always a term (a rule about the XML gives an XPath), and a client that wants the name has this to look it up in.
+
+**The binding is the reader's own table, served.** `GET /_mock/binding/Invoice` is made from `mockeinvoice.ubl.BINDINGS` when it is asked: the table the reader reads a document by and the writer writes one by. A client that walks a document beside it names every element as the reader does, and a test does just that, with `xml.etree` and the served JSON alone, over this project's samples and fifty documents from EN 16931 and XRechnung, and comes to the same terms, values and groups.
+
+```
+{"kind": "Invoice", "element": "Invoice", "namespace": "urn:oasis:...:Invoice-2",
+ "prefixes": {"cbc": "urn:oasis:...", "cac": "urn:oasis:..."},
+ "children": [
+   {"element": "cbc:CustomizationID", "term": "BT-24"},
+   ...
+   {"element": "cac:AllowanceCharge", "group": "BG-20", "repeats": true,
+    "when": {"text": "cbc:ChargeIndicator is false or 0", "path": "cbc:ChargeIndicator", "in": ["false", "0"]},
+    "children": [{"element": "cbc:ChargeIndicator", "fixed": "false", "accepts": ["false", "0"]}, ...]},
+   ...]}
+```
+
+A node has its `element` and what it is:
+
+| | |
+| --- | --- |
+| `term` | the business term its text is the value of. `attributes` names each attribute the element may carry, and the term that attribute is (`"unitCode": "BT-130"`) or `null` where the standard has none for it (`currencyID`). `on_document` marks a term that is the document's whatever element it is in: a credit note's due date is inside `PaymentMeans`. |
+| `group`, `repeats` | the business group the element is, and whether it is one of many, as `/_mock/terms` has it |
+| `fixed`, `accepts` | the one value the binding gives the element (`TaxScheme/ID` is `VAT`), and what is read as that value |
+| `ubl` | something UBL requires or tells things apart by, that the standard has no term or group for, under the name this package holds it by: `ubl:NetworkID` on a payment card, the scheme of a tax registration that is not VAT, the two document references known by their type code |
+| `once_per` | the term the element is written once for each value of: one `PartyIdentification` to an identifier |
+| `subject` | on `cbc:Note`, the term of the code written before the text between two `#` (`#AAI#the note`) |
+| `children` | the elements in it, in the order the schema has them |
+| *none of these* | an element that only holds others: `cac:Party`, `cac:TaxTotal` |
+
+- **One element, several entries.** `cac:AllowanceCharge` is an allowance or a charge; `cac:AdditionalDocumentReference` is the invoiced object, a supporting document, or on a credit note the project. Such entries are in the reader's order, and each but the last has a `when`: the first whose test holds has the element, and one with no `when` takes what is left. A `when` has its `text` in words, and where it can be computed, a `path` under the element (and an `attribute` of what is there), the values it is `in`, and `ignoring_case`. An element's text is compared with the space around it taken off.
+- **One test is not data.** Which of two `cac:TaxTotal` is the VAT total in the accounting currency (BT-111) depends on two currency codes at the head of the document. Those two entries have their test in words and a `name` (`tax-total-in-document-currency`, `tax-total-in-accounting-currency`), and a client has to know them by that.
+- **A tax registration is served as two entries**, the VAT identifier and whatever else, told apart by `cac:TaxScheme/cbc:ID`. In the package it is one piece of code and not a row of the table, so those nodes are written out by hand beside it. A buyer and a tax representative have no term for another registration: theirs is held as the VAT identifier, and the second entry says so by naming the same term.
+- **What has no node has no business term.** An element of a document that the binding has no node for is what the reader reports as `UNHELD`.
+- **Not in it:** which place a value is written back to when a term has two (the creditor identifier, on the seller or the payee), and how often an element may occur.
 
 To see the two sides talk, run two: a buyer with `--seller-url http://127.0.0.1:8101/responses`, and a supplier with `--buyer-url http://127.0.0.1:8100/invoices`.
 

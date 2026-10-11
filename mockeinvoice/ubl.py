@@ -34,7 +34,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 from xml.parsers import expat
 from xml.sax.saxutils import escape, quoteattr
 
-from .model import (INVOICED_OBJECT_REFERENCE, NUMERIC, PARTY_ROLE, PROJECT_REFERENCE, TERMS,
+from .model import (ATTRIBUTE_TERMS, INVOICED_OBJECT_REFERENCE, NUMERIC, PARTY_ROLE,
+                    PROJECT_REFERENCE, TERMS,
                     Document, Finding, Group, Refused, Value)
 
 INVOICE_NS = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
@@ -222,20 +223,64 @@ class TaxRegistration:
 Entry = Union[Leaf, Fixed, Wrap, Many, Note, TaxRegistration]
 
 
-def indicator(values: Sequence[str]) -> Callable:
-    return lambda node, _context: node.find_text(cbc("ChargeIndicator")).strip() in values
+class When:
+    """The test that picks an entry among several with one tag, and the same
+    test said as data, for a reader of the binding that is not this one
+    (`described`).
+
+    `text` says it in words. Where the test is "the element at `path` under
+    this one (or its `attribute`) is one of `among`", those say it again in a
+    form that can be computed: an element's text is compared with the space
+    around it taken off, an attribute as it is written, and either without
+    regard to case where `ignoring_case`. A test that is not of that form
+    has its words and a `name` to know it by.
+    """
+
+    def __init__(self, test: Callable, text: str, path: str = "", attribute: str = "",
+                 among: Sequence[str] = (), ignoring_case: bool = False, name: str = ""):
+        self.test, self.text, self.path, self.attribute = test, text, path, attribute
+        self.name = name
+        self.among, self.ignoring_case = tuple(among), ignoring_case
+
+    def __call__(self, node: "Node", context) -> bool:
+        return self.test(node, context)
+
+    def described(self) -> dict:
+        said: dict = {"text": self.text}
+        if self.name:
+            said["name"] = self.name
+        if self.path:
+            said["path"] = self.path
+            if self.attribute:
+                said["attribute"] = self.attribute
+            said["in"] = list(self.among)
+            if self.ignoring_case:
+                said["ignoring_case"] = True
+        return said
 
 
-def document_type(*codes: str) -> Callable:
-    return lambda node, _context: node.find_text(cbc("DocumentTypeCode")).strip() in codes
+def indicator(values: Sequence[str]) -> When:
+    return When(lambda node, _c: node.find_text(cbc("ChargeIndicator")).strip() in values,
+                "cbc:ChargeIndicator is %s" % " or ".join(values),
+                path="cbc:ChargeIndicator", among=values)
 
 
-def sepa(node: Node, _context) -> bool:
+def document_type(*codes: str) -> When:
+    return When(lambda node, _c: node.find_text(cbc("DocumentTypeCode")).strip() in codes,
+                "cbc:DocumentTypeCode is %s" % " or ".join(codes),
+                path="cbc:DocumentTypeCode", among=codes)
+
+
+def _sepa(node: Node, _context) -> bool:
     identifier = node.find(cbc("ID"))
     return identifier is not None and identifier.attributes.get("schemeID", "").upper() == "SEPA"
 
 
-def in_accounting_currency(node: Node, context) -> bool:
+sepa = When(_sepa, "cbc:ID has the schemeID SEPA, in capitals or not",
+            path="cbc:ID", attribute="schemeID", among=("SEPA",), ignoring_case=True)
+
+
+def _in_accounting_currency(node: Node, context) -> bool:
     """The second `TaxTotal`: the VAT total in the accounting currency (BT-111).
 
     It is told from the first by its currency being the one `TaxCurrencyCode`
@@ -247,8 +292,15 @@ def in_accounting_currency(node: Node, context) -> bool:
                 and currency != context.currency and node.find(cac("TaxSubtotal")) is None)
 
 
-def in_document_currency(node: Node, context) -> bool:
-    return not in_accounting_currency(node, context)
+in_accounting_currency = When(
+    _in_accounting_currency,
+    "cbc:TaxAmount's currencyID is the currency cbc:TaxCurrencyCode names, that is not the "
+    "document's currency, and there is no cac:TaxSubtotal",
+    name="tax-total-in-accounting-currency")
+in_document_currency = When(
+    lambda node, context: not _in_accounting_currency(node, context),
+    "it is not the cac:TaxTotal in the accounting currency, which the next entry is",
+    name="tax-total-in-document-currency")
 
 
 VAT_SCHEME = Wrap(cac("TaxScheme"), [Fixed(cbc("ID"), "VAT")])
@@ -482,6 +534,95 @@ def binding(kind: str) -> List[Entry]:
 
 
 BINDINGS = {kind: binding(kind) for kind in ROOTS}
+
+# The term an attribute of a term's element is, where the standard has one:
+# ("BT-129", "unitCode") is "BT-130".
+ATTRIBUTE_OF = {where: term for term, where in ATTRIBUTE_TERMS.items()}
+IS_VAT = When(lambda node, _context: True, "cac:TaxScheme/cbc:ID is VAT, in capitals or not",
+              path="cac:TaxScheme/cbc:ID", among=("VAT",), ignoring_case=True)
+
+
+def described(kind: str) -> dict:
+    """The binding of an `Invoice` or a `CreditNote` as plain data: a tree of
+    elements, each with what it is.
+
+    A node has its `element` as people write it (`cbc:ID`) and one or more of:
+
+    - `term`: the business term its text is the value of. `attributes` names
+      each attribute it may carry and the term that attribute is, or None
+      where the standard has none for it. `on_document` marks a term that is
+      the document's whatever element it is in.
+    - `ubl`: something UBL requires or tells things by, that the standard has
+      no term or group for, under the name this package holds it by.
+    - `fixed`: the one value the binding gives it, and `accepts`, what is read
+      as that value.
+    - `group` and `repeats`: the business group the element is, and whether
+      it is one of many.
+    - `once_per`: the term it is written once for each value of.
+    - `when`: the test that picks it among entries with the same element
+      (`When.described`). Entries are in the reader's order: of several with
+      one element the first whose test holds has it, and one with no test
+      takes what is left.
+    - `subject`: on a note, the term of the code written before its text
+      between two `#`.
+    - `children`: the elements in it, in the order the schema has them.
+    """
+    if kind not in BINDINGS:
+        raise ValueError("a binding is of %s, not %r" % (" or ".join(BINDINGS), kind))
+    return {"kind": kind, "element": kind, "namespace": ROOTS[kind],
+            "prefixes": {PREFIXES[namespace]: namespace for namespace in (CBC_NS, CAC_NS)},
+            "children": [node for entry in BINDINGS[kind] for node in entry_described(entry)]}
+
+
+def entry_described(entry: Entry) -> List[dict]:
+    """One entry as the nodes it is: one, but for a tax registration."""
+    if isinstance(entry, TaxRegistration):
+        return tax_registration_described(entry)
+    said: dict = {"element": qname(entry.tag)}
+    if isinstance(entry, Note):
+        said.update(group="BG-1", repeats=True, term="BT-22", subject="BT-21")
+    elif isinstance(entry, Leaf):
+        said["ubl" if entry.term.startswith("ubl:") else "term"] = entry.term
+        if entry.attributes:
+            said["attributes"] = {name: ATTRIBUTE_OF.get((entry.term, name))
+                                  for name in entry.attributes}
+        if entry.root:
+            said["on_document"] = True
+    elif isinstance(entry, Fixed):
+        said.update(fixed=entry.text, accepts=list(entry.accept))
+    else:
+        if isinstance(entry, Many):
+            said.update(group=entry.group, repeats=True)
+        elif entry.marks.startswith("ubl:"):
+            said["ubl"] = entry.marks
+        elif entry.marks:
+            said.update(group=entry.marks, repeats=False)
+        if getattr(entry, "per", ""):
+            said["once_per"] = entry.per
+        if entry.when:
+            said["when"] = entry.when.described()
+        said["children"] = [node for child in entry.children for node in entry_described(child)]
+    return [said]
+
+
+def tax_registration_described(entry: TaxRegistration) -> List[dict]:
+    """`cac:PartyTaxScheme` as two entries told apart by the scheme: the VAT
+    identifier, and whatever else. A party with no term for another
+    registration has it held as its VAT identifier, with the scheme kept
+    beside the value (`read_tax_registration`)."""
+    element = qname(entry.tag)
+
+    def one(term: str, scheme: dict, when: Optional[When] = None) -> dict:
+        said: dict = {"element": element}
+        if when:
+            said["when"] = when.described()
+        said["children"] = [{"element": "cbc:CompanyID", "term": term},
+                            {"element": "cac:TaxScheme",
+                             "children": [dict({"element": "cbc:ID"}, **scheme)]}]
+        return said
+
+    return [one(entry.vat, {"fixed": "VAT", "accepts": ["VAT"]}, IS_VAT),
+            one(entry.other or entry.vat, {"ubl": "TaxScheme/ID"})]
 
 
 # -- reading ----------------------------------------------------------------
