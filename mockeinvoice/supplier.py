@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from . import order as _order
+from . import clock as _clock
 from . import response as _response
 from . import specification as _specification
 from .buyer import TurnedAway, out_of_order
@@ -129,8 +130,11 @@ class Supplier:
             self.orders: Dict[str, Order] = {}
             self.written = 0                # the invoices it has written and numbered
 
+    def today(self) -> datetime.date:
+        return _clock.utc(self.now()).date()
+
     def stamp(self) -> str:
-        return self.now().replace(microsecond=0, tzinfo=None).isoformat()
+        return _clock.stamp(self.now())
 
     # -- sending ------------------------------------------------------------------------
 
@@ -182,7 +186,7 @@ class Supplier:
         """
         order = _order.read_order(said)
         with self.lock:
-            document = _order.invoice(order, self.who, self.numbered(), self.now().date())
+            document = _order.invoice(order, self.who, self.numbered(), self.today())
             report = check(document, "peppol")
             if report.verdict != "valid":
                 raise NotTaken("the invoice for this order would be %s, and an order that "
@@ -205,8 +209,7 @@ class Supplier:
                                 % (order.number, " and ".join(
                                     self.sent[one].number for one in order.invoices)))
             billing = self.asked_for(order, quantities)
-            document = _order.invoice(order, self.who, self.numbered(), self.now().date(),
-                                      billing)
+            document = _order.invoice(order, self.who, self.numbered(), self.today(), billing)
             try:
                 issued = self.judged(write(document))
             except NotSent as no:

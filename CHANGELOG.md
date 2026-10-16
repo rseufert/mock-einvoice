@@ -8,6 +8,8 @@ says so where it does.
 
 ## [Unreleased]
 
+**Every stamp changes**: it ends in `Z` now.
+
 ### Added
 
 - **The UBL binding over HTTP** ([#39]). `GET /_mock/binding/Invoice` and
@@ -20,9 +22,29 @@ says so where it does.
   as data. A test reads this project's samples and fifty published documents
   by the served binding alone and comes to what the reader comes to. In
   Python, `ubl.described`.
+- **A clock that can be moved** ([#41]). `POST /_mock/advance` takes
+  `seconds` or a time `to` move to, in the query string or as JSON, and what
+  is received or said afterwards is stamped then: the stamps, the date and
+  time in an Invoice Response, and the dates of an invoice the supplier
+  writes. It does not go backwards. In Python, `mockeinvoice.clock.Clock`,
+  which a `Buyer` and a `Supplier` take as their `now`.
+- `GET /_mock/health` says what time it is by the clock, as `"now"`.
+- `--clock` takes a time with `Z` or an offset (`2026-10-07T11:00+02:00`),
+  and a date alone.
 
 ### Changed
 
+- **A stamp says its zone.** `"received"` and `"sent"` were
+  `2026-10-07T09:00:00` and are `2026-10-07T09:00:00Z`. They were UTC before
+  and are UTC now; a client that parsed them as a time with no zone has to
+  take the `Z`.
+- **What `--clock` means is written down, and is what it did**: the clock is
+  pinned to that moment, in UTC, and stands still until it is advanced. A
+  `now` given to a `Buyer` or a `Supplier` with a zone other than UTC is said
+  in UTC, where its own wall time was written before.
+- `--clock` refuses what is not a time with a sentence, and no longer takes
+  the other forms `datetime.fromisoformat` does (a space for the `T`,
+  fractions of a second).
 - The tests that pick an entry of the binding (`ubl.sepa`,
   `ubl.in_accounting_currency`, and what `ubl.indicator` and
   `ubl.document_type` return) are `ubl.When` objects, called as the
@@ -309,3 +331,4 @@ built, and was in no release.
 [#33]: https://github.com/rseufert/mock-einvoice/issues/33
 [#34]: https://github.com/rseufert/mock-einvoice/issues/34
 [#39]: https://github.com/rseufert/mock-einvoice/issues/39
+[#41]: https://github.com/rseufert/mock-einvoice/issues/41

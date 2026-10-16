@@ -30,7 +30,7 @@ class TakingIn(unittest.TestCase):
     def test_a_valid_document_is_held(self):
         made, held = holding()
         self.assertEqual((held.id, held.number, held.profile, held.received),
-                         ("1", "GLX-4711", "01", "2026-10-07T12:00:30"))
+                         ("1", "GLX-4711", "01", "2026-10-07T12:00:30Z"))
         self.assertEqual(held.xml, INVOICE.encode("utf-8"))
         self.assertIs(made.invoices["1"], held)
 
@@ -49,7 +49,7 @@ class TakingIn(unittest.TestCase):
         self.assertIn("BR-02", [f.code for f in away.report.failures])
         self.assertEqual(made.invoices, {})
         self.assertEqual([(when, code) for when, code, _why in made.turned_away],
-                         [("2026-10-07T12:00:30", "INVALID")])
+                         [("2026-10-07T12:00:30Z", "INVALID")])
 
     def test_one_that_could_not_be_judged_is_turned_away_naming_the_rules(self):
         # Every rule is built, so this is the package as it would be without
