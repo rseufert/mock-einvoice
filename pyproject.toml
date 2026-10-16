@@ -36,6 +36,7 @@ dependencies = []
 mock-einvoice = "mockeinvoice.server:main"
 
 [project.urls]
+Homepage = "https://rickseufert.com/mock-einvoice/"
 Repository = "https://github.com/rseufert/mock-einvoice"
 Issues = "https://github.com/rseufert/mock-einvoice/issues"
 Changelog = "https://github.com/rseufert/mock-einvoice/blob/main/CHANGELOG.md"

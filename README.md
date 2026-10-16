@@ -4,6 +4,9 @@ A mock e-invoicing partner: EN 16931 invoices in and out, with the responses tha
 
 A sibling of [mock-sap](https://github.com/rseufert/mock-sap), [mock-edi](https://github.com/rseufert/mock-edi) and [mock-bank](https://github.com/rseufert/mock-bank), and of [mock-acme](https://github.com/rseufert/mock-acme), the integration between them.
 
+By [Rick Seufert](https://rickseufert.com). Its [page](https://rickseufert.com/mock-einvoice/)
+has the features and how to start it.
+
 ```
 python3 -m pip install mock-einvoice
 mock-einvoice --port 8100
