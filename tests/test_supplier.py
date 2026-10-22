@@ -30,7 +30,7 @@ class Sending(unittest.TestCase):
                             deliver=lambda xml: delivered.append(xml) or {"status": 201})
         issued = supplier.send(INVOICE)
         self.assertEqual((issued.id, issued.number, issued.sent, issued.forced, issued.status),
-                         ("1", "GLX-4711", "2026-10-07T12:00:30", False, ""))
+                         ("1", "GLX-4711", "2026-10-07T12:00:30Z", False, ""))
         self.assertEqual((delivered, issued.delivery, issued.xml),
                          ([INVOICE.encode("utf-8")], {"status": 201}, INVOICE.encode("utf-8")))
         self.assertEqual(supplier.send(XRECHNUNG.encode("utf-8")).id, "2")
@@ -78,7 +78,7 @@ class HearingBack(unittest.TestCase):
         got = supplier.hear(RESPONSE)
         self.assertEqual((got.id, got.invoice, got.code, got.partial, got.ignored,
                           got.received),
-                         ("1", "1", "UQ", False, "", "2026-10-07T12:00:30"))
+                         ("1", "1", "UQ", False, "", "2026-10-07T12:00:30Z"))
         self.assertEqual((got.xml, got.response.statuses[0].reason_code),
                          (RESPONSE.encode("utf-8"), "REF"))
         self.assertEqual((issued.status, issued.responses, supplier.answers),

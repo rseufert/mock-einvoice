@@ -28,6 +28,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
+from . import clock as _clock
 from . import response as _response
 from . import specification as _specification
 from .model import Document, Finding, Refused
@@ -166,7 +167,8 @@ class Buyer:
 
     `deliver` is called with each response's XML and returns what became of
     sending it (see `Sent.delivery`); without one, responses are kept and not
-    sent. `now` is the clock.
+    sent. `now` is the clock: a `clock.Clock`, or anything that when called
+    gives the time (one with no zone is taken to be UTC).
     """
 
     def __init__(self, answers: str = "required",
@@ -188,7 +190,7 @@ class Buyer:
             self.turned_away: List[Tuple[str, str, str]] = []
 
     def stamp(self) -> str:
-        return self.now().replace(microsecond=0, tzinfo=None).isoformat()
+        return _clock.stamp(self.now())
 
     # -- taking a document in -----------------------------------------------------------
 
@@ -279,7 +281,7 @@ class Buyer:
                 note: str) -> Response:
         """The response to one document: from its buyer to its seller, about
         it by number, date and type, under the profile its own calls for."""
-        document, now = held.document, self.now()
+        document, now = held.document, _clock.utc(self.now())
         return Response(
             profile=(_response.BILLING_WITH_RESPONSE if held.profile == "02"
                      else _response.PROFILE),
