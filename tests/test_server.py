@@ -692,6 +692,7 @@ class TheClock(unittest.TestCase):
                 ("?to=2026-10-07T08:59:59", b"", "the clock does not go backwards: it is "
                  "2026-10-07T09:00:00Z, and 2026-10-07T08:59:59Z is before that"),
                 ("?to=tomorrow", b"", "a time is written 2026-10-07"),
+                ("?to=2026-10-07T12:00+02:00", b"", "so a + offset is written %2B there"),
                 ("?to=2026-02-30", b"", "2026-02-30 is no date and time there is"),
                 ("", {"to": 20261008}, "a time is written"),
                 ("?days=1", b"", "what is taken is seconds=N or to=a time, once"),

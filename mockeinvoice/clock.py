@@ -53,6 +53,15 @@ def stamp(moment: datetime.datetime) -> str:
     return utc(moment).replace(microsecond=0, tzinfo=None).isoformat() + "Z"
 
 
+def plus_lost(text: object) -> str:
+    """What to add to a refusal of a time whose `+` offset a query string
+    turned into a space, and "" for a time wrong any other way. Not repaired:
+    a URL only this mock took would break wherever else a script sent it."""
+    if isinstance(text, str) and MOMENT.fullmatch(text.replace(" ", "+")):
+        return ": a + in a query string is read as a space, so a + offset is written %2B there"
+    return ""
+
+
 def moment(text: str) -> datetime.datetime:
     """A moment from `2026-10-07`, `2026-10-07T09:00` or `2026-10-07T09:00:30`,
     with `Z` or an offset (`+02:00`) after a time, or `Invalid`. With no zone
@@ -60,7 +69,7 @@ def moment(text: str) -> datetime.datetime:
     if not isinstance(text, str) or not MOMENT.fullmatch(text):
         raise Invalid("a time is written 2026-10-07, 2026-10-07T09:00 or "
                       "2026-10-07T09:00:30, in UTC or with Z or an offset such as +02:00 "
-                      "after it, and not %r" % (text,))
+                      "after it, and not %r%s" % (text, plus_lost(text)))
     try:
         return utc(datetime.datetime.fromisoformat(text[:-1] if text.endswith("Z") else text))
     except (ValueError, OverflowError):

@@ -31,6 +31,19 @@ class AMoment(unittest.TestCase):
             with self.assertRaises(Invalid, msg=text):
                 moment(text)
 
+    def test_a_plus_a_query_string_made_a_space_is_named_and_nothing_else_is(self):
+        for text in ("2026-10-07T11:00 02:00", "2026-10-07T11:00:30 02:00"):
+            with self.assertRaises(Invalid) as raised:
+                moment(text)
+            self.assertTrue(str(raised.exception).endswith(
+                ": a + in a query string is read as a space, so a + offset is written %2B "
+                "there"), text)
+        for text in ("2026-10-07T11:00 25:00", "2026-10-07 11:00", "2026-10-07T11:00  02:00",
+                     " 2026-10-07T11:00", "2026-10-07T11:00-02:00 ", "tomorrow", None):
+            with self.assertRaises(Invalid) as raised:
+                moment(text)
+            self.assertNotIn("%2B", str(raised.exception), text)
+
     def test_a_time_with_no_zone_is_utc_and_one_with_a_zone_is_that_moment(self):
         self.assertEqual(utc(datetime.datetime(2026, 10, 7, 9, 0)), NINE)
         self.assertEqual(utc(datetime.datetime(2026, 10, 7, 11, 0, tzinfo=CEST)), NINE)
