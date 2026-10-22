@@ -31,6 +31,10 @@ says so where it does.
 - `GET /_mock/health` says what time it is by the clock, as `"now"`.
 - `--clock` takes a time with `Z` or an offset (`2026-10-07T11:00+02:00`),
   and a date alone.
+- A time whose `+` offset a query string turned into a space
+  (`?to=2026-10-07T11:00+02:00`) is refused with a word saying a `+` is
+  written `%2B` there ([#44]). Only such a time: one wrong another way is
+  not sent looking for a `+`.
 
 ### Changed
 
@@ -332,3 +336,4 @@ built, and was in no release.
 [#34]: https://github.com/rseufert/mock-einvoice/issues/34
 [#39]: https://github.com/rseufert/mock-einvoice/issues/39
 [#41]: https://github.com/rseufert/mock-einvoice/issues/41
+[#44]: https://github.com/rseufert/mock-einvoice/issues/44
