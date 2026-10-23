@@ -8,7 +8,12 @@ says so where it does.
 
 ## [Unreleased]
 
-**Every stamp changes**: it ends in `Z` now.
+Nothing yet.
+
+## [0.4.0] - 2026-10-22
+
+The binding is served, and the clock can be moved. **Every stamp changes**:
+it ends in `Z` now.
 
 ### Added
 
@@ -38,6 +43,8 @@ says so where it does.
 
 ### Changed
 
+- The README and the package's page on PyPI point at the project's page on
+  rickseufert.com ([#43](https://github.com/rseufert/mock-einvoice/pull/43)).
 - **A stamp says its zone.** `"received"` and `"sent"` were
   `2026-10-07T09:00:00` and are `2026-10-07T09:00:00Z`. They were UTC before
   and are UTC now; a client that parsed them as a time with no zone has to

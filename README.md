@@ -14,7 +14,7 @@ mock-einvoice --port 8100
 
 It reads and writes UBL invoices and credit notes, and the Peppol Invoice Response that answers one, and holds them to their published rules: invoices to all 979 rules of the EN 16931 core, to all 165 of Peppol's (its own 63, the 31 it has for Germany and the 71 for seven other countries), and to the 34 of a standard XRechnung document; responses to all 82 of theirs. Over HTTP it is a buyer that takes invoices in and answers the Peppol ones, and a supplier that sends them, writes the invoice for an order it is told of, and takes the answers.
 
-**What 0.3.0 is not:**
+**What 0.4.0 is not:**
 
 - **It writes one kind of invoice of its own, and no other.** The supplier writes the invoice for an order it is told of: every line at one standard rate of VAT, no allowances or charges, no credit note, no XRechnung ([An order, and the invoice for it](#an-order-and-the-invoice-for-it)). Anything else it sends as it is given.
 - **It takes no order off the network.** An order is this mock's own JSON on a `/_mock` path. Peppol's UBL `Order` and its rules are not built.

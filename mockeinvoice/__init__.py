@@ -37,7 +37,7 @@ from .response import Response
 from .rules import Report, check, check_response
 from .ubl import parse, parse_tree, write
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = ["Document", "Finding", "Group", "Refused", "Report", "Response", "Value", "check",
            "read", "read_response", "validate", "validate_response", "write", "write_response",
